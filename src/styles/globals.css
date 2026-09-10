@@ -555,12 +555,53 @@
     box-shadow: 0 var(--lip, 6px) 0 0 var(--cta-lip);
   }
 
+  /*
+   * The same chunky face in the KCO wordmark yellow, for the in-page section
+   * menu. The shell sidebar keeps the CTA green, so the two navigations never
+   * read as the same level. Every value is a solid colour - the face, the lip
+   * and the ink are mixes against #fff/#000, never an alpha tint, so the item
+   * stays opaque over whatever panel it sits on.
+   *
+   * The ink is derived from the yellow rather than --kco-ink, because that
+   * token flips light in dark mode and this face is yellow in both themes.
+   */
+  .btn-chunky-yellow {
+    --cta: var(--kco-yellow);
+    --cta-hover: color-mix(in oklab, var(--kco-yellow) 88%, #fff);
+    --cta-active: var(--kco-yellow-deep);
+    --cta-lip: var(--kco-yellow-deep);
+    --cta-lip-active: color-mix(in oklab, var(--kco-yellow-deep) 84%, #000);
+    --cta-fg: color-mix(in oklab, var(--kco-yellow) 22%, #000);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .btn-chunky,
     .btn-chunky:active:not(:disabled) {
       transition: background-color 120ms linear;
       transform: none;
     }
+  }
+
+  /*
+   * Category chip. The face, the border and the ink are mixes against a ground
+   * colour rather than alpha tints, so the chip stays opaque wherever it lands
+   * - on a card, on the page ground, or over the gamified wash.
+   *
+   * --chip-base is the only thing a caller sets; everything else is derived,
+   * so any palette colour works without a second token.
+   */
+  .chip-solid {
+    --chip-base: var(--flav-classic);
+    --chip-ground: #ffffff;
+    background-color: color-mix(in oklab, var(--chip-base) 16%, var(--chip-ground));
+    border-color: color-mix(in oklab, var(--chip-base) 42%, var(--chip-ground));
+    color: color-mix(in oklab, var(--chip-base) 78%, #000);
+  }
+  .dark .chip-solid {
+    --chip-ground: var(--surface-active);
+    background-color: color-mix(in oklab, var(--chip-base) 24%, var(--chip-ground));
+    border-color: color-mix(in oklab, var(--chip-base) 52%, var(--chip-ground));
+    color: color-mix(in oklab, var(--chip-base) 34%, #fff);
   }
 
   /*

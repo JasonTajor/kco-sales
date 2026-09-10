@@ -15,6 +15,7 @@ import type { Invitation, Permission, PermissionKey } from '@/types/rbac'
 import { ACCESS_PRESETS, invitationState } from '@/types/rbac'
 import { displayIdentifier, normaliseUsername, usernameProblem } from '@/lib/username'
 import { rbacService, userService } from '@/services'
+import { accountCreationBlocker, getAuthConfig, invalidateAuthConfig } from '@/services/supabase/authConfig'
 import { useAsync } from '@/hooks/useAsync'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { usePermissions } from '@/features/auth/PermissionProvider'
@@ -54,6 +55,13 @@ export function AccessPage() {
   const { can } = usePermissions()
 
   const people = useAsync(() => userService.all(), [])
+  /**
+   * Two Supabase project settings silently break account creation, and both
+   * report themselves as something else. Checked here so the problem is stated
+   * before anybody fills in a form, not after.
+   */
+  const authConfig = useAsync(() => getAuthConfig(), [])
+  const blocker = accountCreationBlocker(authConfig.data ?? null)
   const invitations = useAsync(() => (can('users.view') ? rbacService.invitations() : Promise.resolve([])), [])
   const catalogue = useAsync(() => rbacService.permissions(), [])
   const defaults = useAsync(() => rbacService.roleDefaults(), [])
@@ -70,13 +78,35 @@ export function AccessPage() {
         crumbs={[{ label: 'Administration' }, { label: 'Users & access' }]}
         actions={
           can('users.invite') ? (
-            <Button onClick={() => setInviteOpen(true)}>
+            <Button
+              onClick={() => setInviteOpen(true)}
+              disabled={Boolean(blocker)}
+              title={blocker ?? undefined}
+            >
               <UserPlus className="size-4" aria-hidden />
               Create account
             </Button>
           ) : undefined
         }
       />
+
+      {blocker && (
+        <Callout variant="warning" title="Account creation is blocked by a project setting">
+          <p>{blocker}</p>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="mt-tight"
+            onClick={() => {
+              invalidateAuthConfig()
+              authConfig.reload()
+            }}
+          >
+            <RotateCcw className="size-3.5" aria-hidden />
+            I have changed it - re-check
+          </Button>
+        </Callout>
+      )}
 
       <Callout variant="info" title="You create the accounts">
         Nobody can register themselves - not with a password, and not with Google. You set the

@@ -241,20 +241,20 @@ export function MaterialDetailPage() {
                         // The ring would vanish against the active item's fill at the global 1px offset.
                         'focus-visible:outline-offset-2',
                         active
-                          ? // Same chunky active item as the sidebar: flat face over a solid lip.
-                            'btn-chunky font-semibold [--lip:3px]'
+                          ? // Same chunky active item as the sidebar - flat face over a solid lip -
+                            // but in the KCO wordmark yellow, so the section menu never reads as
+                            // the shell navigation.
+                            'btn-chunky btn-chunky-yellow font-semibold [--lip:3px]'
                           : 'text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg',
                       )}
                     >
                       <span
                         className={cn(
                           'mt-px flex size-4 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold tnum',
-                          // On the active face the success green is the fill itself, so the
-                          // badge inverts instead of disappearing into it.
+                          // On the yellow face the badge inverts to the same ink, solid, so it
+                          // reads without a translucent tint over the fill.
                           active
-                            ? complete
-                              ? 'bg-cta-fg text-cta'
-                              : 'bg-cta-fg/25 text-cta-fg'
+                            ? 'bg-[var(--cta-fg)] text-[var(--cta)]'
                             : complete
                               ? 'bg-success text-white'
                               : 'bg-neutral-subtle text-fg-tertiary',

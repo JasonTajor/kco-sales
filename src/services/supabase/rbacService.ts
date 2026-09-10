@@ -247,6 +247,30 @@ function rowToInvitation(r: {
  */
 function friendlySignUpError(message: string): string {
   const m = message.toLowerCase()
+
+  /*
+   * These two are the same root cause wearing different hats.
+   *
+   * With "Confirm email" ON, GoTrue tries to mail a confirmation to the
+   * account's internal address. That address has no mailbox, so the send
+   * fails and GoTrue blames the address - then rate-limits after a few tries.
+   * Neither message mentions the setting that is actually wrong.
+   */
+  if (m.includes('is invalid') && m.includes('email')) {
+    return (
+      'Turn off email confirmation in Supabase, then try again. ' +
+      '(Authentication → Providers → Email → uncheck "Confirm email".) ' +
+      'A username has no mailbox, so the confirmation cannot be delivered - which Supabase ' +
+      'reports as an invalid address even though the address is fine.'
+    )
+  }
+  if (m.includes('rate limit') && m.includes('email')) {
+    return (
+      'Supabase is rate-limiting confirmation emails, which it should not be sending at all. ' +
+      'Turn off Authentication → Providers → Email → "Confirm email", then try again.'
+    )
+  }
+
   if (m.includes('already registered') || m.includes('already been registered')) {
     return 'That username is already taken.'
   }
