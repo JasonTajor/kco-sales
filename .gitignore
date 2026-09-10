@@ -1,0 +1,33 @@
+node_modules
+dist
+dist-ssr
+*.local
+
+# Environment - only .env.example is committed.
+.env
+.env.*
+!.env.example
+
+# Contains a plain-text bootstrap password. Delete it after first use.
+supabase/bootstrap-admin.sql
+
+# Supabase CLI working files. Migrations and seed SQL ARE committed.
+supabase/.branches
+supabase/.temp
+supabase/.env
+
+# Build metadata
+*.tsbuildinfo
+
+# Local agent tooling. These are symlinks into a directory outside the repo,
+# so they would land on GitHub as broken links and mean nothing to a clone.
+.claude/
+.agents/
+skills-lock.json
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.swp

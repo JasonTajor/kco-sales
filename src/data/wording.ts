@@ -1,0 +1,31 @@
+import type { WordingPair } from '@/types'
+
+/** Module 7 - Professional Wording. Searchable from Quick Reference, Phone and Chat. */
+export const wordingPairs: WordingPair[] = [
+  { id: 'w01', avoid: 'Wait lang.', use: 'May I ask you to hold for a moment?', context: 'phone', tags: ['hold'], note: 'Always ask, never instruct.' },
+  { id: 'w02', avoid: 'Hindi ko alam.', use: 'Let me verify that for you.', context: 'both', tags: ['accuracy'], note: 'Add a time commitment: "…and I will come back to you within the hour."' },
+  { id: 'w03', avoid: 'Di ko gets.', use: 'May I clarify what you mean?', context: 'both', tags: ['clarify'] },
+  { id: 'w04', avoid: 'Ha? Ano po?', use: 'I am sorry, could you repeat that please?', context: 'phone', tags: ['clarify'] },
+  { id: 'w05', avoid: 'Wala kami niyan.', use: 'That variant is not available right now - may I suggest an alternative?', context: 'both', tags: ['stock'] },
+  { id: 'w06', avoid: 'Sige, bye.', use: 'Thank you for your time, Ms. Rivera. Have a good day!', context: 'phone', tags: ['closing'] },
+  { id: 'w07', avoid: 'Hindi pwede yan.', use: 'What I can do for you instead is…', context: 'both', tags: ['boundaries'], note: 'Always follow a no with an alternative.' },
+  { id: 'w08', avoid: 'Mali kayo.', use: 'Let me check the details so we are looking at the same information.', context: 'both', tags: ['conflict'] },
+  { id: 'w09', avoid: 'Bakit hindi niyo binasa?', use: 'Let me walk you through that part again.', context: 'both', tags: ['conflict'] },
+  { id: 'w10', avoid: 'Kelangan niyo mag-decide na.', use: 'Would you like me to reserve one while you decide?', context: 'both', tags: ['closing'] },
+  { id: 'w11', avoid: 'Yan na po ang pinakamura.', use: 'That is our reseller price, and it already includes delivery within Metro Manila.', context: 'both', tags: ['price'] },
+  { id: 'w12', avoid: 'ok po sure', use: 'Sure po! 😊', context: 'chat', tags: ['tone'] },
+  { id: 'w13', avoid: 'wla po eh', use: 'Wala pa po sa ngayon, but restock is next week.', context: 'chat', tags: ['stock'] },
+  { id: 'w14', avoid: 'thnx po', use: 'Thank you po!', context: 'chat', tags: ['tone'] },
+  { id: 'w15', avoid: 'sry d ko alam', use: 'Let me verify that for you po.', context: 'chat', tags: ['accuracy'] },
+  { id: 'w16', avoid: 'Sino ba kausap niyo dati?', use: 'Let me read the conversation so you do not have to repeat yourself.', context: 'chat', tags: ['handover'] },
+  { id: 'w17', avoid: 'Sabi na sa post eh.', use: 'Yes po, and to make it clearer - here are the details again.', context: 'chat', tags: ['conflict'] },
+  { id: 'w18', avoid: 'Bili na po kayo.', use: 'Gusto niyo po bang i-reserve ko para sa Friday delivery?', context: 'chat', tags: ['closing'] },
+  { id: 'w19', avoid: 'Sure na po yan kikita kayo.', use: 'Ang kita po ay depende sa selling price at area niyo - pwede natin i-compute base sa numbers niyo.', context: 'both', tags: ['claims'], note: 'Never guarantee earnings. See the objection card "Magkano ang kita ko?".' },
+  { id: 'w20', avoid: 'Last stock na po!', use: 'Limited po ang natitira sa batch na ito - gusto niyo po bang i-hold ko para sa inyo?', context: 'both', tags: ['claims'], note: 'Only if it is actually true. False urgency is prohibited.' },
+  { id: 'w21', avoid: 'Ay sorry, na-forget ko.', use: 'Apologies for the delay - here is the update I promised.', context: 'both', tags: ['tone'] },
+  { id: 'w22', avoid: 'Tawag na lang po kayo ulit.', use: 'I will call you back at 4 PM today - is that convenient?', context: 'phone', tags: ['callback'], note: 'The agent owns the callback, never the customer.' },
+  { id: 'w23', avoid: 'Ganun talaga.', use: 'I understand that is frustrating. Here is what I can do.', context: 'both', tags: ['complaints'] },
+  { id: 'w24', avoid: 'Fault yun ng courier.', use: 'I am sorry this happened. I am filing it with our logistics team today.', context: 'both', tags: ['complaints'], note: 'Never blame a third party by name.' },
+  { id: 'w25', avoid: 'Magkano budget mo?', use: 'May I ask what budget range you are comfortable with?', context: 'both', tags: ['discovery'] },
+  { id: 'w26', avoid: 'Hindi po namin yan ginagawa.', use: 'That is outside what I can approve - let me check with my team lead and come back to you.', context: 'both', tags: ['escalation'] },
+]

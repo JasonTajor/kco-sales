@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="Training, scripts, and quick reference for the KCO Sales and Chat Support team." />
+    <meta name="theme-color" content="#14a80d" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b0c0e" media="(prefers-color-scheme: dark)" />
+    <!--
+      Both are needed. `apple-mobile-web-app-capable` is the original iOS
+      form and is now reported as deprecated by Chrome, which wants the
+      standardised `mobile-web-app-capable`. Older iOS still reads only the
+      Apple one, so dropping it would lose standalone mode on those devices.
+    -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="KCO Learning" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/favicon-64.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>KCO Learning · Sales &amp; Chat Support</title>
+    <script>
+      // Apply persisted theme before first paint to avoid a flash.
+      try {
+        var t = localStorage.getItem('kco.theme') || 'system'
+        var dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
+        if (dark) document.documentElement.classList.add('dark')
+      } catch (e) {}
+    </script>
+  </head>
+  <body class="h-full">
+    <div id="root" class="h-full"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

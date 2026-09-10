@@ -1,0 +1,689 @@
+@import 'tailwindcss';
+
+/* Dark mode is class-driven so the user can override the system preference. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------------------
+   Palette - neutral-first. Colour carries meaning, never decoration.
+   Light theme: off-white ground, white surfaces, hairline borders.
+--------------------------------------------------------------------------- */
+:root {
+  --bg: #f7f8f8;
+  --bg-inset: #f0f1f2;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-hover: #f5f6f7;
+  --surface-active: #eef0f1;
+  --sidebar: #fbfbfc;
+
+  --border: #e3e6e8;
+  --border-strong: #ccd1d6;
+  --border-chunk: #d7dbdf;
+  --border-focus: var(--cta-lip);
+
+  --text: #16181d;
+  --text-secondary: #62666d;
+  --text-tertiary: #6d7278;
+  --text-inverted: #ffffff;
+
+  --primary: var(--cta);
+  --primary-hover: var(--cta-hover);
+  --primary-active: var(--cta-lip);
+  --primary-text: #ffffff;
+  --primary-subtle: color-mix(in oklab, var(--cta) 14%, #ffffff);
+  --primary-subtle-text: color-mix(in oklab, var(--cta) 74%, #000000);
+  --primary-ring: color-mix(in oklab, var(--cta) 22%, transparent);
+
+  --success: var(--cta);
+  --success-subtle: color-mix(in oklab, var(--cta) 14%, #ffffff);
+  --success-text: color-mix(in oklab, var(--cta) 72%, #000000);
+
+  --warning: #c2740a;
+  --warning-subtle: #fdf3e2;
+  --warning-text: #96590a;
+
+  --danger: #c2352b;
+  --danger-subtle: #fdeceb;
+  --danger-text: #a32a22;
+
+  --info: #2563c9;
+  --info-subtle: #eaf1fd;
+  --info-text: #1d4fa3;
+
+  --neutral-subtle: #f0f1f2;
+  --neutral-text: #62666d;
+
+  /* ---------------------------------------------------------------------
+     KCO brand, sampled from the logo artwork and the product range.
+     Logo: bright green badge, yellow wordmark, black outline.
+     --------------------------------------------------------------------- */
+  --kco-green: #14a80d;
+  --kco-green-deep: #0d7a08;
+  --kco-yellow: #f5d800;
+  --kco-yellow-deep: #d9a800;
+  --kco-ink: #14210f;
+
+  /* Product flavours, median-sampled from the pack photography. Used for
+     category identity, never as the only carrier of meaning. */
+  --flav-classic: #3fbf2a;
+  --flav-cheese: #f48f11;
+  --flav-sourcream: #185334;
+  --flav-ube: #4c1668;
+  --flav-original: #142663;
+  --flav-lightblue: #1ba8e5;
+  --flav-chocolate: #7a2904;
+  --flav-black: #341c1a;
+  --flav-chili: #9f1310;
+
+  /* Gamified surface gradient. Derived from --cta rather than sampled
+     separately, so the wash, the primary button, and the active nav item are
+     provably the same green and cannot drift apart. */
+  --grad-top: var(--cta);
+  --grad-mid: color-mix(in oklab, var(--cta) 42%, #ffffff);
+  --grad-bot: color-mix(in oklab, var(--cta) 6%, var(--bg));
+
+  /* Primary call-to-action. Sampled from the supplied reference button:
+     flat bright face over a solid darker lip, no gradient. */
+  --cta: #45b71f;
+  --cta-hover: #4ec424;
+  --cta-active: #3ea51b;
+  --cta-lip: #2c7a16;
+  --cta-lip-active: #256613;
+  --cta-fg: #ffffff;
+
+
+  --shadow-xs: 0 1px 2px 0 rgb(16 18 22 / 0.05);
+  --shadow-sm: 0 1px 3px 0 rgb(16 18 22 / 0.07), 0 1px 2px -1px rgb(16 18 22 / 0.05);
+  --shadow-md: 0 4px 12px -2px rgb(16 18 22 / 0.09), 0 2px 4px -2px rgb(16 18 22 / 0.05);
+  --shadow-lg: 0 12px 32px -8px rgb(16 18 22 / 0.16), 0 4px 8px -4px rgb(16 18 22 / 0.06);
+
+  --scrollbar-thumb: #cfd2d6;
+}
+
+/* Dark theme is designed, not inverted: near-black ground, lifted panels,
+   brighter accent so it survives on a dark field. */
+.dark {
+  --bg: #0b0c0e;
+  --bg-inset: #08090a;
+  --surface: #121316;
+  --surface-raised: #17191d;
+  --surface-hover: #1b1e22;
+  --surface-active: #22262b;
+  --sidebar: #0e0f12;
+
+  --border: #24272c;
+  --border-strong: #363b41;
+  --border-chunk: #2b2f35;
+  --border-focus: var(--cta);
+
+  --text: #e7e9ea;
+  --text-secondary: #989ea5;
+  --text-tertiary: #7d848b;
+  --text-inverted: #0b0c0e;
+
+  --primary: var(--cta);
+  --primary-hover: var(--cta-hover);
+  --primary-active: var(--cta-lip);
+  --primary-text: #ffffff;
+  --primary-subtle: color-mix(in oklab, var(--cta) 20%, #0b0c0e);
+  --primary-subtle-text: color-mix(in oklab, var(--cta) 62%, #ffffff);
+  --primary-ring: color-mix(in oklab, var(--cta) 28%, transparent);
+
+  --success: var(--cta);
+  --success-subtle: color-mix(in oklab, var(--cta) 20%, #0b0c0e);
+  --success-text: color-mix(in oklab, var(--cta) 60%, #ffffff);
+
+  --warning: #d99326;
+  --warning-subtle: #2a1f0d;
+  --warning-text: #e0aa54;
+
+  --danger: #e05a4f;
+  --danger-subtle: #2b1413;
+  --danger-text: #ef8078;
+
+  --info: #4a8ce8;
+  --info-subtle: #101c2e;
+  --info-text: #79aef3;
+
+  --neutral-subtle: #1c1f23;
+  --neutral-text: #989ea5;
+
+  --kco-green: #2fc41f;
+  --kco-green-deep: #178f10;
+  --kco-yellow: #ffe22e;
+  --kco-yellow-deep: #d9a800;
+  --kco-ink: #e7e9ea;
+
+  --flav-classic: #4fd139;
+  --flav-cheese: #ffa62b;
+  --flav-sourcream: #2b7d52;
+  --flav-ube: #8b5cc4;
+  --flav-original: #3d5bb8;
+  --flav-lightblue: #45bff0;
+  --flav-chocolate: #b4703f;
+  --flav-black: #8b7d7a;
+  --flav-chili: #e05a4f;
+
+
+  --cta: #4cc025;
+  --cta-hover: #57cd2e;
+  --cta-active: #43ac20;
+  --cta-lip: #2f8318;
+  --cta-lip-active: #276e14;
+  --cta-fg: #ffffff;
+
+
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.5), 0 1px 2px -1px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.55), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 12px 32px -8px rgb(0 0 0 / 0.7), 0 4px 8px -4px rgb(0 0 0 / 0.5);
+
+  --scrollbar-thumb: #33373d;
+}
+
+/* ---------------------------------------------------------------------------
+   Theme mapping. `inline` keeps utilities pointing at the live var() so the
+   light/dark swap happens without regenerating classes.
+--------------------------------------------------------------------------- */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-inset: var(--bg-inset);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-active: var(--surface-active);
+  --color-sidebar: var(--sidebar);
+
+  --color-border-DEFAULT: var(--border);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-line-chunk: var(--border-chunk);
+
+  --color-fg: var(--text);
+  --color-fg-secondary: var(--text-secondary);
+  --color-fg-tertiary: var(--text-tertiary);
+  --color-fg-inverted: var(--text-inverted);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-active: var(--primary-active);
+  --color-primary-fg: var(--primary-text);
+  --color-primary-subtle: var(--primary-subtle);
+  --color-primary-subtle-fg: var(--primary-subtle-text);
+
+  --color-success: var(--success);
+  --color-success-subtle: var(--success-subtle);
+  --color-success-fg: var(--success-text);
+  --color-warning: var(--warning);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-warning-fg: var(--warning-text);
+  --color-danger: var(--danger);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-danger-fg: var(--danger-text);
+  --color-info: var(--info);
+  --color-info-subtle: var(--info-subtle);
+  --color-info-fg: var(--info-text);
+  --color-neutral-subtle: var(--neutral-subtle);
+  --color-neutral-fg: var(--neutral-text);
+
+  --color-kco-green: var(--kco-green);
+  --color-kco-green-deep: var(--kco-green-deep);
+  --color-kco-yellow: var(--kco-yellow);
+  --color-kco-ink: var(--kco-ink);
+
+  --color-flav-classic: var(--flav-classic);
+  --color-flav-cheese: var(--flav-cheese);
+  --color-flav-sourcream: var(--flav-sourcream);
+  --color-flav-ube: var(--flav-ube);
+  --color-flav-original: var(--flav-original);
+  --color-flav-lightblue: var(--flav-lightblue);
+  --color-flav-chocolate: var(--flav-chocolate);
+  --color-flav-black: var(--flav-black);
+  --color-flav-chili: var(--flav-chili);
+
+  --color-cta: var(--cta);
+  --color-cta-hover: var(--cta-hover);
+  --color-cta-lip: var(--cta-lip);
+  --color-cta-fg: var(--cta-fg);
+
+
+  /* -------------------------------------------------------------------
+     Rhythm. Four steps, each clearly separated from the one below it, so
+     the size of an interval tells you which level of the hierarchy you
+     are looking at. Anything landing between these steps is drift.
+     ------------------------------------------------------------------- */
+  --spacing-hair: 0.25rem; /*  4px - inside a label/value pair */
+  --spacing-tight: 0.5rem; /*  8px - inside a single group */
+  --spacing-snug: 0.75rem; /* 12px - a tile or control and its label */
+  --spacing-group: 1rem; /* 16px - between sibling objects */
+  --spacing-rhythm: 2rem; /* 32px - between page sections and page regions */
+
+  /* Container contract. Every region of a panel - header, body, rows,
+     footer - takes its horizontal padding from --spacing-card, so they
+     share one left edge no matter which page composes them. There is
+     deliberately no separate row-x token: if the two could differ they
+     would, and the alignment is the whole point. */
+  --spacing-card: 1rem; /* 16px - panel padding, all four sides */
+  --spacing-row-y: 0.75rem; /* 12px - list-row vertical padding */
+
+  /* Page gutter. The only interval that scales with the viewport. */
+  --spacing-gutter: 1.25rem; /* 20px */
+  --spacing-gutter-sm: 1.75rem; /* 28px */
+  --spacing-gutter-lg: 3rem; /* 48px */
+
+  --font-sans: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Compact type scale: body sits at 14px, metadata at 12px. */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-5xl: 2.5rem;
+  --text-5xl--line-height: 2.6rem;
+  --text-6xl: 3.25rem;
+  --text-6xl--line-height: 3.3rem;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.5rem;
+  --text-md: 1rem;
+  --text-md--line-height: 1.65rem;
+  --text-lg: 1rem;
+  --text-lg--line-height: 1.5rem;
+  --text-xl: 1.125rem;
+  --text-xl--line-height: 1.6rem;
+  --text-2xl: 1.25rem;
+  --text-2xl--line-height: 1.75rem;
+  --text-3xl: 1.5rem;
+  --text-3xl--line-height: 1.9rem;
+  --text-4xl: 1.875rem;
+  --text-4xl--line-height: 2.25rem;
+
+  /* Chunky, friendly radii. The workhorse is `lg` at 14px, which is what most
+     containers use, so the whole app softens from one place. */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 24px;
+
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+
+  --animate-fade-in: fade-in 120ms var(--ease-out-quart);
+  --animate-overlay-in: overlay-in 140ms var(--ease-out-quart);
+  --animate-dialog-in: dialog-in 160ms var(--ease-out-quart);
+  --animate-drawer-in: drawer-in 200ms var(--ease-out-quart);
+  --animate-pop-in: pop-in 110ms var(--ease-out-quart);
+  --animate-shimmer: shimmer 1.4s ease-in-out infinite;
+  --animate-xp-pop: xp-pop 900ms var(--ease-out-quart) forwards;
+  --animate-node-pulse: node-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
+@keyframes overlay-in { from { opacity: 0 } to { opacity: 1 } }
+@keyframes dialog-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.985) }
+  to { opacity: 1; transform: translateY(0) scale(1) }
+}
+@keyframes drawer-in { from { transform: translateX(100%) } to { transform: translateX(0) } }
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(-2px) scale(0.98) }
+  to { opacity: 1; transform: translateY(0) scale(1) }
+}
+@keyframes shimmer { 0%, 100% { opacity: 0.55 } 50% { opacity: 0.9 } }
+/* Mascot idle. Small enough to read as breathing rather than bouncing. */
+@keyframes float {
+  0%, 100% { transform: translateY(0) }
+  50% { transform: translateY(-6px) }
+}
+@keyframes xp-pop {
+  0% { transform: translateY(0) scale(1); opacity: 0 }
+  30% { transform: translateY(-6px) scale(1.06); opacity: 1 }
+  100% { transform: translateY(-18px) scale(1); opacity: 0 }
+}
+@keyframes node-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--primary-ring) }
+  50% { box-shadow: 0 0 0 8px transparent }
+}
+
+/* ---------------------------------------------------------------------------
+   Base
+--------------------------------------------------------------------------- */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 0.9375rem;
+    line-height: 1.5rem;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv05' 1, 'ss03' 1;
+    text-rendering: optimizeLegibility;
+  }
+  /* One consistent, visible focus ring across the whole app. */
+  :focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 1px;
+    border-radius: 3px;
+  }
+  ::selection {
+    background: var(--primary-subtle);
+    color: var(--primary-subtle-text);
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 700;
+    letter-spacing: -0.016em;
+  }
+  h1 { font-weight: 800; letter-spacing: -0.024em }
+  input, textarea, select, button {
+    font: inherit;
+    color: inherit;
+  }
+  /* Tabular figures everywhere numbers are compared. */
+  .tnum { font-variant-numeric: tabular-nums }
+}
+
+@layer components {
+  /*
+   * Gamified header wash. Sits behind hero content on learner screens only;
+   * the admin console stays flat. Ramps vivid at the top to near-surface at
+   * the fold so content below keeps full contrast.
+   */
+  .kco-gradient {
+    background-image: linear-gradient(
+      180deg,
+      var(--grad-top) 0%,
+      var(--grad-mid) 46%,
+      var(--grad-bot) 100%
+    );
+  }
+
+  /* Same ramp, fading to the page background so it can end mid-scroll. */
+  .kco-gradient-fade {
+    background-image: linear-gradient(
+      180deg,
+      var(--grad-top) 0%,
+      var(--grad-mid) 52%,
+      var(--bg) 100%
+    );
+  }
+
+  /* Soft radial bloom behind a mascot or hero figure. */
+  .kco-bloom {
+    background-image: radial-gradient(
+      60% 60% at 50% 45%,
+      rgb(255 255 255 / 0.55) 0%,
+      rgb(255 255 255 / 0) 70%
+    );
+  }
+  /*
+   * On a near-black panel the light bloom reads as a grey disc behind the
+   * figure rather than as light around it, so the dark theme blooms with the
+   * brand green at low alpha instead of with white.
+   */
+  .dark .kco-bloom {
+    background-image: radial-gradient(
+      60% 60% at 50% 45%,
+      color-mix(in oklab, var(--cta) 22%, transparent) 0%,
+      transparent 72%
+    );
+  }
+
+  /*
+   * Chunky panel. A 2px outline over a solid bottom lip, so a card reads as a
+   * physical object rather than a tinted rectangle. --chunk sets the lip depth;
+   * the lip is a shadow, not a border, so it never affects layout.
+   */
+  .chunk {
+    /* Override per instance to tint a panel; both must be opaque colours. */
+    --chunk-face: var(--surface);
+    --chunk-edge: var(--border-chunk);
+    background-color: var(--chunk-face);
+    /* Thin on three sides - all the weight belongs in the bottom lip. */
+    border: 1px solid var(--chunk-edge);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 var(--chunk, 4px) 0 0 var(--chunk-edge);
+    /*
+     * The lip is painted outside the border box, so without this a gap of
+     * 16px between two panels reads as 12px and the last panel on a page
+     * sits 4px tighter than a flat one. Reserving it is what makes every
+     * gap token below mean what it says. Same trick as .tile-chunky.
+     */
+    margin-bottom: var(--chunk, 4px);
+  }
+
+  /* Interactive panels only: lifts on hover, drops onto the lip when pressed. */
+  .chunk-press {
+    transition:
+      transform 90ms var(--ease-out-quart),
+      box-shadow 90ms var(--ease-out-quart);
+  }
+  .chunk-press:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 calc(var(--chunk, 4px) + 1px) 0 0 var(--chunk-edge);
+  }
+  .chunk-press:active {
+    transform: translateY(var(--chunk, 4px));
+    box-shadow: 0 0 0 0 var(--chunk-edge);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chunk-press,
+    .chunk-press:hover,
+    .chunk-press:active {
+      transform: none;
+      transition: none;
+    }
+  }
+
+  /*
+   * Meter. Deliberately plain: a slim track and a solid fill, no outline and
+   * no gloss. Every progress bar in the app routes through these two classes,
+   * so the look is changed here and nowhere else.
+   */
+  .meter {
+    height: 0.5rem;
+    overflow: hidden;
+    border-radius: 9999px;
+    background-color: var(--bg-inset);
+  }
+  .meter-fill {
+    height: 100%;
+    border-radius: 9999px;
+  }
+
+  /*
+   * Solid face over a lip - the chunky button construction, reused wherever a
+   * surface should read as an object rather than a tinted rectangle.
+   *
+   *   --face      fill colour                       (required)
+   *   --face-fg   text colour                       (default white)
+   *   --face-lip  lip depth                         (default 2px)
+   *   --face-edge lip colour                        (default: --face, darkened)
+   *
+   * Light faces must pass --face-fg and --face-edge, since a derived lip off a
+   * pale fill is too weak to read.
+   */
+  .face-chunky {
+    background-color: var(--face);
+    color: var(--face-fg, #fff);
+    box-shadow: 0 var(--face-lip, 2px) 0 0
+      var(--face-edge, color-mix(in oklab, var(--face) 66%, #000));
+  }
+
+  /*
+   * Primary CTA, matched to the reference: flat face, solid offset lip, and a
+   * press that drops the face onto the lip rather than fading it.
+   * --lip is set per size class; the radius rides on the same scale.
+   */
+  .btn-chunky {
+    position: relative;
+    background-color: var(--cta);
+    color: var(--cta-fg);
+    border: 0;
+    box-shadow: 0 var(--lip, 6px) 0 0 var(--cta-lip);
+    transform: translateY(0);
+    transition:
+      background-color 120ms var(--ease-out-quart),
+      box-shadow 90ms var(--ease-out-quart),
+      transform 90ms var(--ease-out-quart);
+  }
+  .btn-chunky:hover:not(:disabled) {
+    background-color: var(--cta-hover);
+  }
+  .btn-chunky:active:not(:disabled) {
+    background-color: var(--cta-active);
+    /* Face travels the full lip height, so the button sits flush when pressed. */
+    transform: translateY(var(--lip, 6px));
+    box-shadow: 0 0 0 0 var(--cta-lip-active);
+  }
+  .btn-chunky:disabled {
+    box-shadow: 0 var(--lip, 6px) 0 0 var(--cta-lip);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .btn-chunky,
+    .btn-chunky:active:not(:disabled) {
+      transition: background-color 120ms linear;
+      transform: none;
+    }
+  }
+
+  /*
+   * The block every icon and animated emoji sits on. Same language as
+   * .btn-chunky: a solid face over an offset lip, never a transparent tint, so
+   * artwork reads against a colour instead of through it.
+   *
+   * --tile sets the face and the lip is derived from it, so any palette colour
+   * works without a second token. The lip is painted outside the border box,
+   * so the margin keeps it from overlapping whatever sits underneath.
+   */
+  .tile-chunky {
+    --tile-base: var(--primary);
+    /* The ground a soft face is mixed against - never alpha, always a colour. */
+    --tile-ground: #ffffff;
+    --tile: var(--tile-base);
+    --tile-edge: color-mix(in oklab, var(--tile-base) 72%, #000);
+    --tile-lip: 3px;
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--tile);
+    color: var(--tile-fg, #fff);
+    box-shadow: 0 var(--tile-lip) 0 0 var(--tile-edge);
+    margin-bottom: var(--tile-lip);
+    transition:
+      transform 120ms var(--ease-out-quart),
+      box-shadow 120ms var(--ease-out-quart);
+  }
+
+  /*
+   * Full-colour artwork needs a light face to read against, so an emoji tile
+   * keeps the palette hue but at a pale value, with the saturated hue on the
+   * lip. Still one solid colour on each surface - nothing is translucent.
+   */
+  .tile-chunky[data-face='soft'] {
+    --tile: color-mix(in oklab, var(--tile-base) 20%, var(--tile-ground));
+    --tile-edge: color-mix(in oklab, var(--tile-base) 58%, var(--tile-ground));
+    --tile-fg: color-mix(in oklab, var(--tile-base) 78%, #000);
+  }
+
+  .dark .tile-chunky {
+    --tile-ground: var(--surface-active);
+    --tile-edge: color-mix(in oklab, var(--tile-base) 62%, #000);
+  }
+  .dark .tile-chunky[data-face='soft'] {
+    --tile: color-mix(in oklab, var(--tile-base) 26%, var(--tile-ground));
+    --tile-edge: color-mix(in oklab, var(--tile-base) 66%, #000);
+    --tile-fg: color-mix(in oklab, var(--tile-base) 30%, #fff);
+  }
+
+  /* A tile inside a hovered card lifts, the way the CTA does under a press. */
+  [data-emoji-group]:hover .tile-chunky {
+    transform: translateY(-1px);
+    box-shadow: 0 calc(var(--tile-lip) + 1px) 0 0 var(--tile-edge);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tile-chunky,
+    [data-emoji-group]:hover .tile-chunky {
+      transform: none;
+      transition: none;
+    }
+  }
+
+  /*
+   * A row of key/value metadata, used by the mobile card list. Added after the
+   * original design pass, so the label column width is one decision rather
+   * than repeated per screen.
+   */
+  .field-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 8rem) minmax(0, 1fr);
+    gap: var(--spacing-tight) var(--spacing-group);
+    align-items: baseline;
+  }
+  @media (max-width: 30rem) {
+    .field-grid {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--spacing-hair);
+    }
+  }
+}
+
+@layer utilities {
+  /* Expands the hit area of small controls to 44px on touch, leaving the
+     painted size untouched. Only applies to coarse pointers so desktop
+     hover targets are not accidentally enlarged. */
+  @media (pointer: coarse) {
+    .touch-target::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      min-width: 44px;
+      min-height: 44px;
+      width: 100%;
+      height: 100%;
+    }
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .no-scrollbar { scrollbar-width: none }
+  .no-scrollbar::-webkit-scrollbar { display: none }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
