@@ -21,6 +21,15 @@ interface PermissionContextValue {
   /** True once the set has been fetched; guards wait rather than flicker. */
   ready: boolean
   keys: Set<PermissionKey>
+  /**
+   * Set when the permission set could not be loaded at all.
+   *
+   * Distinct from "loaded, and it is empty". The difference decides whether a
+   * guard denies or falls back to the role check: an admin must not be locked
+   * out of the console by a failed request, and cannot be, because the real
+   * boundary is RLS on the server rather than anything decided here.
+   */
+  loadError: Error | null
   /** Does the current user hold this permission? */
   can: (key: PermissionKey) => boolean
   /** Any one of these? */
@@ -36,11 +45,13 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [keys, setKeys] = useState<Set<PermissionKey>>(new Set())
   const [ready, setReady] = useState(false)
+  const [loadError, setLoadError] = useState<Error | null>(null)
   const [nonce, setNonce] = useState(0)
 
   useEffect(() => {
     if (!user) {
       setKeys(new Set())
+      setLoadError(null)
       setReady(true)
       return
     }
@@ -48,15 +59,36 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
     let cancelled = false
     setReady(false)
 
-    rbacService
-      .mine()
+    /**
+     * Retried, because a single failed request should not decide a person's
+     * access for the rest of the session. Two quick attempts cover a dropped
+     * connection or a token refreshing mid-flight.
+     */
+    const attempt = async (remaining: number): Promise<Set<PermissionKey>> => {
+      try {
+        return await rbacService.mine()
+      } catch (err) {
+        if (remaining > 0) {
+          await new Promise((r) => setTimeout(r, 400))
+          return attempt(remaining - 1)
+        }
+        throw err
+      }
+    }
+
+    attempt(2)
       .then((next) => {
-        if (!cancelled) setKeys(next)
+        if (cancelled) return
+        setKeys(next)
+        setLoadError(null)
       })
-      .catch(() => {
-        // Failing closed is the safe direction: an empty set hides admin
-        // affordances rather than showing ones that will be refused.
-        if (!cancelled) setKeys(new Set())
+      .catch((err: unknown) => {
+        if (cancelled) return
+        // Recorded rather than silently treated as "no permissions". Guards
+        // read `loadError` and fall back to the role check, so a fetch failure
+        // degrades the UI instead of locking an admin out of their console.
+        setKeys(new Set())
+        setLoadError(err instanceof Error ? err : new Error('Could not load permissions'))
       })
       .finally(() => {
         if (!cancelled) setReady(true)
@@ -73,8 +105,8 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
   const value = useMemo<PermissionContextValue>(
-    () => ({ ready, keys, can, canAny, canAll, reload }),
-    [ready, keys, can, canAny, canAll, reload],
+    () => ({ ready, keys, loadError, can, canAny, canAll, reload }),
+    [ready, keys, loadError, can, canAny, canAll, reload],
   )
 
   return <PermissionContext.Provider value={value}>{children}</PermissionContext.Provider>

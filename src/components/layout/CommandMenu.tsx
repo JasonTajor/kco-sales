@@ -24,10 +24,13 @@ export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChang
     if (!open) setSearch('')
   }, [open])
 
-  const { keys } = usePermissions()
+  const { keys, loadError } = usePermissions()
   const navItems = useMemo(
-    () => (user ? navigationFor(user.role, keys).flatMap((g) => g.items) : []),
-    [user, keys],
+    () =>
+      user
+        ? navigationFor(user.role, loadError ? undefined : keys).flatMap((g) => g.items)
+        : [],
+    [user, keys, loadError],
   )
 
   /**

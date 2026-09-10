@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import {
   Check,
   Copy,
+  ExternalLink,
   Info,
   Loader2,
   RotateCcw,
@@ -16,6 +17,8 @@ import { ACCESS_PRESETS, invitationState } from '@/types/rbac'
 import { displayIdentifier, normaliseUsername, usernameProblem } from '@/lib/username'
 import { rbacService, userService } from '@/services'
 import { accountCreationBlocker, getAuthConfig, invalidateAuthConfig } from '@/services/supabase/authConfig'
+import { ACCOUNT_SETUP_SQL } from '@/services/supabase/accountSetupSql'
+import { authProvidersUrl, sqlEditorUrl } from '@/lib/supabaseDashboard'
 import { useAsync } from '@/hooks/useAsync'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { usePermissions } from '@/features/auth/PermissionProvider'
@@ -91,21 +94,12 @@ export function AccessPage() {
       />
 
       {blocker && (
-        <Callout variant="warning" title="One migration still to run">
-          <p>{blocker}</p>
-          <Button
-            variant="secondary"
-            size="sm"
-            className="mt-tight"
-            onClick={() => {
-              invalidateAuthConfig()
-              authConfig.reload()
-            }}
-          >
-            <RotateCcw className="size-3.5" aria-hidden />
-            I have changed it - re-check
-          </Button>
-        </Callout>
+        <AccountSetupPanel
+          onRecheck={() => {
+            invalidateAuthConfig()
+            authConfig.reload()
+          }}
+        />
       )}
 
       <Callout variant="info" title="You create the accounts">
@@ -196,6 +190,97 @@ export function AccessPage() {
         />
       )}
     </Page>
+  )
+}
+
+/**
+ * What to do when account creation cannot work yet.
+ *
+ * Creating a usable account needs one of two things, and neither can be done
+ * from here: a browser holding only the publishable key cannot run DDL, and it
+ * cannot bypass email confirmation. So this explains both routes and reduces
+ * each to a single click - a link straight to the settings page, or the SQL on
+ * the clipboard.
+ *
+ * Earlier versions of this panel were a paragraph naming a menu path four
+ * levels deep. An instruction somebody cannot find is the same as no
+ * instruction.
+ */
+function AccountSetupPanel({ onRecheck }: { onRecheck: () => void }) {
+  const toast = useToast()
+  const providers = authProvidersUrl()
+  const editor = sqlEditorUrl()
+
+  return (
+    <Callout variant="warning" title="One setup step before you can create accounts">
+      <p>
+        Supabase will not activate an account while it is waiting for an email confirmation, and a
+        username has no mailbox to confirm from. Either route below fixes that permanently - you
+        only need one.
+      </p>
+
+      <div className="mt-group grid gap-group sm:grid-cols-2">
+        <div className="chunk space-y-tight p-card">
+          <p className="text-sm font-bold text-fg">Quickest — one toggle</p>
+          <p className="text-xs text-fg-secondary">
+            Turn off <strong>Confirm email</strong>. Nothing else changes: the database still
+            refuses anyone you have not created, so this does not open sign-ups.
+          </p>
+          {providers ? (
+            <a
+              href={providers}
+              target="_blank"
+              rel="noreferrer"
+              className="btn-chunky inline-flex h-8 items-center gap-tight rounded-lg px-card text-sm font-bold"
+            >
+              Open Email settings
+              <ExternalLink className="size-3.5" aria-hidden />
+            </a>
+          ) : (
+            <p className="text-2xs text-fg-tertiary">
+              Authentication → Providers → Email → uncheck “Confirm email”.
+            </p>
+          )}
+        </div>
+
+        <div className="chunk space-y-tight p-card">
+          <p className="text-sm font-bold text-fg">Or — run one SQL script</p>
+          <p className="text-xs text-fg-secondary">
+            Adds a function that creates the account directly, so no email is ever involved. Also
+            lets you reset a forgotten password.
+          </p>
+          <div className="flex flex-wrap items-center gap-tight">
+            <Button
+              size="sm"
+              onClick={() => {
+                void navigator.clipboard
+                  ?.writeText(ACCOUNT_SETUP_SQL)
+                  .then(() => toast.success('SQL copied', 'Paste it into the Supabase SQL Editor and run.'))
+                  .catch(() => toast.error('Could not copy', 'Copy it from supabase/migrations/ instead.'))
+              }}
+            >
+              <Copy className="size-3.5" aria-hidden />
+              Copy the SQL
+            </Button>
+            {editor && (
+              <a
+                href={editor}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs font-bold text-fg underline-offset-2 hover:underline"
+              >
+                Open SQL Editor
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <Button variant="secondary" size="sm" className="mt-group" onClick={onRecheck}>
+        <RotateCcw className="size-3.5" aria-hidden />
+        Done — re-check
+      </Button>
+    </Callout>
   )
 }
 
@@ -445,7 +530,7 @@ function PersonDialog({
                   return (
                     <div
                       key={permission.key}
-                      className="flex flex-wrap items-start justify-between gap-tight rounded-lg border border-line px-tight py-tight"
+                      className="flex flex-wrap items-start justify-between gap-tight rounded-md border border-line px-tight py-tight"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="flex items-center gap-tight text-sm font-medium text-fg">
@@ -476,7 +561,7 @@ function PersonDialog({
                               onClick={() => void setPermission(permission.key, value)}
                               aria-pressed={state === id}
                               className={cn(
-                                'rounded-md border-2 px-tight py-0.5 text-2xs font-bold transition-colors',
+                                'rounded-sm border-2 px-tight py-0.5 text-2xs font-bold transition-colors',
                                 state === id
                                   ? id === 'deny'
                                     ? 'border-danger bg-danger-subtle text-danger-fg'
@@ -917,7 +1002,7 @@ function InviteDialog({
               <label
                 key={p.id}
                 className={cn(
-                  'flex cursor-pointer items-start gap-tight rounded-lg border-2 px-tight py-tight transition-colors',
+                  'flex cursor-pointer items-start gap-tight rounded-md border-2 px-tight py-tight transition-colors',
                   presetId === p.id
                     ? 'border-primary bg-primary-subtle'
                     : 'border-line-chunk hover:bg-surface-hover',

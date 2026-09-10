@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { duration, easeOut } from '@/lib/motion'
+import { TriangleAlert } from 'lucide-react'
 import { useCurrentUser } from '@/features/auth/AuthProvider'
+import { usePermissions } from '@/features/auth/PermissionProvider'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Topbar } from '@/components/layout/Topbar'
 import { CommandMenu } from '@/components/layout/CommandMenu'
@@ -10,6 +12,39 @@ import { MobileNav } from '@/components/layout/MobileNav'
 import { useLocalStorage } from '@/hooks/useLocalStorage'
 import { useHotkey } from '@/hooks/useHotkey'
 import { cn } from '@/lib/cn'
+
+/**
+ * Announces a failed permission load.
+ *
+ * When the permission set cannot be fetched, the guards fall back to the
+ * coarse role check so nobody is locked out. That is the right behaviour, but
+ * it must not be silent: an admin would otherwise see the console working
+ * while their fine-grained access is quietly not being applied.
+ */
+function PermissionLoadWarning() {
+  const { loadError, reload } = usePermissions()
+  if (!loadError) return null
+
+  return (
+    <div
+      role="status"
+      className="flex flex-wrap items-center gap-tight border-b border-warning/30 bg-warning-subtle px-gutter py-tight text-xs text-warning-fg"
+    >
+      <TriangleAlert className="size-3.5 flex-none" aria-hidden />
+      <span className="min-w-0 flex-1">
+        Could not load your permissions ({loadError.message}). Access is falling back to your role,
+        so some screens may look available that are not.
+      </span>
+      <button
+        type="button"
+        onClick={reload}
+        className="font-bold underline underline-offset-2"
+      >
+        Retry
+      </button>
+    </div>
+  )
+}
 
 /**
  * Fixed sidebar, sticky topbar, scrolling content. The scroll container is the
@@ -78,6 +113,7 @@ export function AppShell() {
       {/* No fill on the content area: chrome and page share one flat ground. */}
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar user={user} onOpenNav={() => setNavOpen(true)} onOpenCommand={() => setCommandOpen(true)} />
+        <PermissionLoadWarning />
         <main
           id="app-main"
           className="flex-1 overflow-y-auto pb-[72px] scrollbar-thin lg:pb-0"

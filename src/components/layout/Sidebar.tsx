@@ -18,10 +18,17 @@ export function Sidebar({
   onToggleCollapsed: () => void
   onNavigate?: () => void
 }) {
-  // Permission-filtered, so the sidebar never offers a link that would
-  // bounce straight to /forbidden.
-  const { keys } = usePermissions()
-  const groups = navigationFor(role, keys)
+  /*
+   * Permission-filtered, so the sidebar never offers a link that would bounce
+   * straight to /forbidden.
+   *
+   * When the permission set could not be loaded, pass undefined instead of an
+   * empty set: that shows everything the role allows, matching the guard's own
+   * fallback. An empty set would silently hide the entire admin console from an
+   * administrator over one failed request.
+   */
+  const { keys, loadError } = usePermissions()
+  const groups = navigationFor(role, loadError ? undefined : keys)
 
   return (
     <nav

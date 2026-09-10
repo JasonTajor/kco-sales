@@ -1242,6 +1242,50 @@ end $$;
 set local role authenticated;
 set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 
+-- ===========================================================================
+--  ADMIN LOCKOUT
+--
+--  An administrator being unable to reach their own console is the worst
+--  usability failure this system can have, and it happened: the UI guard
+--  treated a failed permission fetch as "no permissions" and redirected.
+--  These assert the server side is sound, so a lockout can only ever be a
+--  client-side fallback problem.
+-- ===========================================================================
+\echo ''
+\echo '=== ADMIN ACCESS ==='
+
+set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+
+do $$
+declare v_count int;
+begin
+  perform pg_temp.ok(public.is_admin(), 'the admin is recognised as an admin');
+
+  select count(*) into v_count from public.my_permissions();
+  perform pg_temp.ok(
+    v_count = (select count(*) from public.permissions),
+    format('my_permissions() returns the full catalogue (%s of %s)',
+           v_count, (select count(*) from public.permissions)));
+
+  -- Every permission a route guard checks must actually be held, or the admin
+  -- console is unreachable in part.
+  perform pg_temp.ok(public.can('users.view'), 'admin holds users.view (Users & Access)');
+  perform pg_temp.ok(public.can('assignments.manage'), 'admin holds assignments.manage');
+  perform pg_temp.ok(public.can('content.edit'), 'admin holds content.edit (Content)');
+  perform pg_temp.ok(public.can('categories.manage'), 'admin holds categories.manage');
+  perform pg_temp.ok(public.can('assessments.edit'), 'admin holds assessments.edit');
+  perform pg_temp.ok(public.can('training.manage'), 'admin holds training.manage');
+  perform pg_temp.ok(public.can('announcements.manage'), 'admin holds announcements.manage');
+  perform pg_temp.ok(public.can('reports.view'), 'admin holds reports.view');
+  perform pg_temp.ok(public.can('logs.view'), 'admin holds logs.view');
+  perform pg_temp.ok(public.can('users.invite'), 'admin holds users.invite (create accounts)');
+
+  -- The status requirement cuts both ways: an active admin must pass.
+  perform pg_temp.ok(
+    (select status from public.profiles where id = auth.uid()) = 'active',
+    'the admin profile is active, which can() requires');
+end $$;
+
 \echo ''
 \echo '=== PRIVACY ==='
 

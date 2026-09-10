@@ -45,10 +45,26 @@ export function IfRole({ allow, children }: { allow: Role[]; children: React.Rea
  */
 export function PermissionGuard({ allow }: { allow: PermissionKey[] }) {
   const { user, loading } = useAuth()
-  const { ready, canAny } = usePermissions()
+  const { ready, canAny, loadError } = usePermissions()
 
   if (loading || !ready) return <FullPageSpinner label="Checking permissions" />
   if (!user) return <Navigate to="/login" replace />
+
+  /*
+   * If the permission set could not be loaded, fall back to the role check
+   * rather than denying.
+   *
+   * Denying looks safer and is actually worse: it locks an administrator out
+   * of the console over a dropped request, with no way back. And it buys
+   * nothing, because this guard is not the security boundary - every table and
+   * RPC behind these screens is governed by RLS, so an admin who gets through
+   * here still cannot do anything the database would refuse.
+   */
+  if (loadError) {
+    if (user.role === 'admin') return <Outlet />
+    return <Navigate to="/forbidden" replace />
+  }
+
   if (!canAny(...allow)) return <Navigate to="/forbidden" replace />
   return <Outlet />
 }
