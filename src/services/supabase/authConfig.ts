@@ -31,6 +31,15 @@ export interface AuthConfig {
   signupDisabled: boolean
   /** True when Google is configured, so the sign-in button will work. */
   googleEnabled: boolean
+  /**
+   * True when the `admin-create-user` Edge Function is deployed.
+   *
+   * When it is, neither of the settings above matters: the function creates
+   * the identity with `email_confirm: true`, so no mail is attempted and no
+   * signup is involved. That is why the warning below is suppressed entirely
+   * in that case rather than nagging about a setting with no effect.
+   */
+  edgeFunctionDeployed: boolean
 }
 
 let cache: Promise<AuthConfig | null> | null = null
@@ -54,11 +63,30 @@ async function fetchConfig(): Promise<AuthConfig | null> {
       autoConfirm: Boolean(body.mailer_autoconfirm),
       signupDisabled: Boolean(body.disable_signup),
       googleEnabled: Boolean(body.external?.google),
+      edgeFunctionDeployed: await probeEdgeFunction(),
     }
   } catch {
     // A failed probe must not block the form. The create attempt itself will
     // still report whatever is actually wrong.
     return null
+  }
+}
+
+/**
+ * Is the Edge Function there?
+ *
+ * Probed with an OPTIONS request, which the function answers for CORS and
+ * which creates nothing. An undeployed name returns 404.
+ */
+async function probeEdgeFunction(): Promise<boolean> {
+  try {
+    const res = await fetch(`${env.supabaseUrl}/functions/v1/admin-create-user`, {
+      method: 'OPTIONS',
+      headers: { apikey: env.supabaseAnonKey },
+    })
+    return res.status !== 404
+  } catch {
+    return false
   }
 }
 
@@ -81,6 +109,9 @@ export function invalidateAuthConfig(): void {
 export function accountCreationBlocker(config: AuthConfig | null): string | null {
   if (!config) return null
 
+  // The function bypasses both settings, so neither is a problem.
+  if (config.edgeFunctionDeployed) return null
+
   if (config.signupDisabled) {
     return (
       'This Supabase project has sign-ups disabled, which also blocks creating accounts here. ' +
@@ -91,10 +122,12 @@ export function accountCreationBlocker(config: AuthConfig | null): string | null
 
   if (!config.autoConfirm) {
     return (
-      'This Supabase project still requires email confirmation. A username has no mailbox, so ' +
-      'the confirmation cannot be delivered and the account is rejected - usually reported as ' +
-      '"Email address is invalid", which is misleading. Turn OFF Authentication → Providers → ' +
-      'Email → "Confirm email", then try again.'
+      'This project requires email confirmation, and a username has no mailbox - so the ' +
+      'confirmation cannot be delivered and Supabase rejects the account, usually reporting ' +
+      '"Email address is invalid" or a mail rate limit. Neither is really about the address. ' +
+      'Fix it either way: deploy the admin-create-user Edge Function (Dashboard → Edge ' +
+      'Functions, code in supabase/functions/admin-create-user), which sends no mail at all — ' +
+      'or turn OFF Authentication → Providers → Email → "Confirm email".'
     )
   }
 

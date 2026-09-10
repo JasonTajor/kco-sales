@@ -232,6 +232,55 @@ service-role key is needed anywhere.
 
 An invitation expires after 14 days and can be revoked before it is used.
 
+## 4b. Deploy the account-creation function
+
+**Recommended.** One paste, and account creation stops depending on any email
+setting.
+
+1. Dashboard → **Edge Functions** → **Deploy a new function**
+2. Name it exactly **`admin-create-user`**
+3. Paste `supabase/functions/admin-create-user/index.ts`
+4. Deploy
+
+No secrets to configure — `SUPABASE_URL`, `SUPABASE_ANON_KEY` and
+`SUPABASE_SERVICE_ROLE_KEY` are injected by the platform.
+
+### Why it is worth doing
+
+A browser can only create an account via `signUp`. With **Confirm email** on,
+GoTrue tries to mail a confirmation to the account's internal address — and a
+username has no mailbox. The send fails, and it is reported as:
+
+```
+Email address "andrea.lopez@kco.local" is invalid
+```
+
+which blames the address when the address is fine. Retry a few times and it
+becomes `over_email_send_rate_limit` instead. Three messages, one cause, none
+of them naming it.
+
+The function calls `auth.admin.createUser({ email_confirm: true })`, which
+never touches the mailer. So it works regardless of the project's email
+settings and cannot hit a mail rate limit.
+
+### It does not weaken authorization
+
+The function does **not** decide who may create accounts. It calls
+`admin_create_account` **as the caller**, using their own JWT, so RLS enforces
+the `users.invite` permission and the audit entry names the real actor. Only
+after the database has approved the account does it use the service-role key,
+and only to create the auth identity.
+
+If it checked permissions itself, that check would be a second implementation
+of the rule and would eventually disagree with the policies.
+
+### The alternative
+
+If you would rather not deploy a function: turn **OFF** Authentication →
+Providers → Email → **"Confirm email"**. The app falls back to the browser
+path, which works fine that way. Users & Access tells you which of the two you
+still need to do, and stops nagging once either is in place.
+
 ## 5. Enable Google sign-in
 
 The frontend flow is already implemented; this is dashboard configuration only,

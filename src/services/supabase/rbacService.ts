@@ -6,6 +6,7 @@ import type {
 } from '@/types/rbac'
 import type { Role } from '@/types'
 import { createIsolatedClient, requireDb, unwrap } from '@/lib/supabase'
+import { env } from '@/lib/env'
 import { normaliseUsername } from '@/lib/username'
 import type { rbacService as DemoApi } from '../demo/rbacService'
 
@@ -120,25 +121,20 @@ export const rbacService: typeof DemoApi = {
   /**
    * Creates a working account.
    *
-   * Two steps, and the order matters:
+   * Prefers the `admin-create-user` Edge Function, which creates the auth
+   * identity with `email_confirm: true` and therefore sends no mail at all.
+   * That matters because the browser's only alternative is `signUp`, and with
+   * "Confirm email" enabled GoTrue tries to mail a confirmation to an address
+   * that has no mailbox - failing with "Email address is invalid" and then
+   * rate-limiting.
    *
-   *   1. `admin_create_account` records the pending account - username, role,
-   *      permissions - and returns the login address it mapped to. This is the
-   *      privileged half, and RLS is what permits it.
-   *   2. `signUp` on an isolated client creates the auth user with the
-   *      password the admin chose. `handle_new_user` finds the record from
-   *      step 1 and turns it into an active profile.
+   * If the function is not deployed, it falls back to the browser path so the
+   * feature still works on a project configured with confirmation off. The
+   * fallback reports the real cause when it cannot.
    *
-   * The isolated client is essential: signing up on the shared one would
-   * replace the admin's session with the new account's and sign them out.
-   *
-   * If step 2 fails the record from step 1 is withdrawn, so the username is
-   * free to retry rather than appearing permanently taken.
-   *
-   * Requires "Confirm email" to be OFF in the Supabase project. A username has
-   * no mailbox, so a confirmation link could never be followed and the account
-   * would be created but unable to sign in - which is a confusing failure to
-   * debug, hence the explicit error below.
+   * Either way the authorization decision is the database's: both paths call
+   * `admin_create_account` as the signed-in admin, so RLS enforces
+   * `users.invite` and the audit entry names the right actor.
    */
   async createAccount(input: {
     username: string
@@ -148,54 +144,18 @@ export const rbacService: typeof DemoApi = {
     department?: string
     position?: string
     permissions: PermissionKey[]
-    /** Optional real address, for a conventional email login instead. */
     email?: string
     note?: string
   }): Promise<{ username: string; loginEmail: string }> {
-    const db = requireDb()
+    const username = normaliseUsername(input.username)
 
-    const created = await db.rpc('admin_create_account', {
-      p_username: normaliseUsername(input.username),
-      p_full_name: input.fullName ?? null,
-      p_role: input.role,
-      p_department: input.department ?? null,
-      p_position: input.position ?? null,
-      p_permissions: input.permissions,
-      p_email: input.email ?? null,
-      p_note: input.note ?? '',
-    })
-    if (created.error) throw new Error(created.error.message)
-
-    const row = (created.data as unknown as { invitation_id: string; login_email: string }[])[0]
-    if (!row) throw new Error('The account record was not created.')
-
-    const isolated = createIsolatedClient()
-    const { data, error } = await isolated.auth.signUp({
-      email: row.login_email,
-      password: input.password,
-      options: { data: { full_name: input.fullName ?? input.username } },
-    })
-
-    if (error) {
-      // Withdraw the record so the username is not left looking taken.
-      await db.rpc('admin_discard_pending_account', { p_invitation_id: row.invitation_id })
-      throw new Error(friendlySignUpError(error.message))
+    const viaFunction = await createViaEdgeFunction({ ...input, username })
+    if (viaFunction.handled) {
+      if (viaFunction.error) throw new Error(viaFunction.error)
+      return viaFunction.result!
     }
 
-    // No session and no confirmed user means the project still requires email
-    // confirmation - which a username account can never satisfy.
-    if (!data.session && !data.user?.confirmed_at && !data.user?.email_confirmed_at) {
-      throw new Error(
-        'The account was created but cannot sign in yet: this Supabase project still requires ' +
-          'email confirmation, and a username has no mailbox. Turn off Authentication -> ' +
-          'Providers -> Email -> "Confirm email", then create the account again.',
-      )
-    }
-
-    return {
-      username: normaliseUsername(input.username),
-      loginEmail: row.login_email,
-    }
+    return createViaBrowserSignUp({ ...input, username })
   },
 
   async revokeInvitation(id: string): Promise<void> {
@@ -288,4 +248,137 @@ function friendlySignUpError(message: string): string {
     return 'Too many accounts created just now. Wait a minute and try again.'
   }
   return message
+}
+
+/* ---------------------------------------------------------- creation paths -- */
+
+/**
+ * The preferred path: an Edge Function holding the service-role key.
+ *
+ * `handled: false` means the function is not deployed, so the caller should
+ * try the browser path instead. Any other failure is `handled: true` with a
+ * message, because a deployed function that refused is an answer - retrying
+ * in the browser would just produce a worse error.
+ */
+async function createViaEdgeFunction(input: {
+  username: string
+  password: string
+  fullName?: string
+  role: Role
+  department?: string
+  position?: string
+  permissions: PermissionKey[]
+  email?: string
+  note?: string
+}): Promise<{
+  handled: boolean
+  error?: string
+  result?: { username: string; loginEmail: string }
+}> {
+  const db = requireDb()
+
+  const { data: session } = await db.auth.getSession()
+  const token = session.session?.access_token
+  if (!token) return { handled: true, error: 'Your session has expired. Sign in again.' }
+
+  try {
+    const res = await fetch(`${env.supabaseUrl}/functions/v1/admin-create-user`, {
+      method: 'POST',
+      headers: {
+        apikey: env.supabaseAnonKey,
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        username: input.username,
+        password: input.password,
+        fullName: input.fullName,
+        role: input.role,
+        department: input.department,
+        position: input.position,
+        permissions: input.permissions,
+        email: input.email,
+        note: input.note,
+      }),
+    })
+
+    // Not deployed: Supabase answers 404 for an unknown function name.
+    if (res.status === 404) return { handled: false }
+
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string
+      username?: string
+      loginEmail?: string
+    }
+
+    if (!res.ok) return { handled: true, error: body.error ?? `Account creation failed (${res.status}).` }
+    if (!body.username || !body.loginEmail) {
+      return { handled: true, error: 'The function returned an unexpected response.' }
+    }
+
+    return { handled: true, result: { username: body.username, loginEmail: body.loginEmail } }
+  } catch {
+    // A network failure is indistinguishable from "not deployed" from here, so
+    // let the browser path try and report whatever it finds.
+    return { handled: false }
+  }
+}
+
+/**
+ * The fallback: record the account, then sign up as the new user.
+ *
+ * Works only on a project with email confirmation off. `signUp` runs on an
+ * isolated client so the admin's own session is not replaced - which would
+ * sign them out mid-task.
+ */
+async function createViaBrowserSignUp(input: {
+  username: string
+  password: string
+  fullName?: string
+  role: Role
+  department?: string
+  position?: string
+  permissions: PermissionKey[]
+  email?: string
+  note?: string
+}): Promise<{ username: string; loginEmail: string }> {
+  const db = requireDb()
+
+  const created = await db.rpc('admin_create_account', {
+    p_username: input.username,
+    p_full_name: input.fullName ?? null,
+    p_role: input.role,
+    p_department: input.department ?? null,
+    p_position: input.position ?? null,
+    p_permissions: input.permissions,
+    p_email: input.email ?? null,
+    p_note: input.note ?? '',
+  })
+  if (created.error) throw new Error(created.error.message)
+
+  const row = (created.data as unknown as { invitation_id: string; login_email: string }[])[0]
+  if (!row) throw new Error('The account record was not created.')
+
+  const isolated = createIsolatedClient()
+  const { data, error } = await isolated.auth.signUp({
+    email: row.login_email,
+    password: input.password,
+    options: { data: { full_name: input.fullName ?? input.username } },
+  })
+
+  if (error) {
+    await db.rpc('admin_discard_pending_account', { p_invitation_id: row.invitation_id })
+    throw new Error(friendlySignUpError(error.message))
+  }
+
+  if (!data.session && !data.user?.confirmed_at && !data.user?.email_confirmed_at) {
+    await db.rpc('admin_discard_pending_account', { p_invitation_id: row.invitation_id })
+    throw new Error(
+      'The account could not be activated because this project requires email confirmation and ' +
+        'a username has no mailbox. Either deploy the admin-create-user Edge Function (see ' +
+        'docs/SUPABASE.md), or turn off Authentication → Providers → Email → "Confirm email".',
+    )
+  }
+
+  return { username: input.username, loginEmail: row.login_email }
 }
