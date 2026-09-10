@@ -228,7 +228,7 @@ export function MaterialDetailPage() {
               className="mt-tight"
               label="Material progress"
             />
-            <ol className="mt-snug space-y-px">
+            <ol className="mt-snug space-y-tight">
               {material.sections.map((s) => {
                 const complete = progress?.completedSectionIds.includes(s.id) ?? false
                 const active = activeSection === s.id
@@ -237,14 +237,27 @@ export function MaterialDetailPage() {
                     <a
                       href={`#section-${s.id}`}
                       className={cn(
-                        'flex items-start gap-tight rounded-md px-tight py-tight text-sm transition-colors',
-                        active ? 'bg-surface-active text-fg' : 'text-fg-secondary hover:bg-surface-hover hover:text-fg',
+                        'flex items-start gap-tight rounded-lg px-snug py-tight text-sm',
+                        // The ring would vanish against the active item's fill at the global 1px offset.
+                        'focus-visible:outline-offset-2',
+                        active
+                          ? // Same chunky active item as the sidebar: flat face over a solid lip.
+                            'btn-chunky font-semibold [--lip:3px]'
+                          : 'text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg',
                       )}
                     >
                       <span
                         className={cn(
                           'mt-px flex size-4 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold tnum',
-                          complete ? 'bg-success text-white' : 'bg-neutral-subtle text-fg-tertiary',
+                          // On the active face the success green is the fill itself, so the
+                          // badge inverts instead of disappearing into it.
+                          active
+                            ? complete
+                              ? 'bg-cta-fg text-cta'
+                              : 'bg-cta-fg/25 text-cta-fg'
+                            : complete
+                              ? 'bg-success text-white'
+                              : 'bg-neutral-subtle text-fg-tertiary',
                         )}
                         aria-hidden
                       >

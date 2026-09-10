@@ -5,7 +5,8 @@ import type {
   PermissionKey,
 } from '@/types/rbac'
 import type { Role } from '@/types'
-import { requireDb, unwrap } from '@/lib/supabase'
+import { createIsolatedClient, requireDb, unwrap } from '@/lib/supabase'
+import { normaliseUsername } from '@/lib/username'
 import type { rbacService as DemoApi } from '../demo/rbacService'
 
 /**
@@ -116,41 +117,85 @@ export const rbacService: typeof DemoApi = {
     return rows.map(rowToInvitation)
   },
 
-  async invite(input: {
-    email: string
+  /**
+   * Creates a working account.
+   *
+   * Two steps, and the order matters:
+   *
+   *   1. `admin_create_account` records the pending account - username, role,
+   *      permissions - and returns the login address it mapped to. This is the
+   *      privileged half, and RLS is what permits it.
+   *   2. `signUp` on an isolated client creates the auth user with the
+   *      password the admin chose. `handle_new_user` finds the record from
+   *      step 1 and turns it into an active profile.
+   *
+   * The isolated client is essential: signing up on the shared one would
+   * replace the admin's session with the new account's and sign them out.
+   *
+   * If step 2 fails the record from step 1 is withdrawn, so the username is
+   * free to retry rather than appearing permanently taken.
+   *
+   * Requires "Confirm email" to be OFF in the Supabase project. A username has
+   * no mailbox, so a confirmation link could never be followed and the account
+   * would be created but unable to sign in - which is a confusing failure to
+   * debug, hence the explicit error below.
+   */
+  async createAccount(input: {
+    username: string
+    password: string
     fullName?: string
     role: Role
     department?: string
     position?: string
     permissions: PermissionKey[]
+    /** Optional real address, for a conventional email login instead. */
+    email?: string
     note?: string
-  }): Promise<string> {
+  }): Promise<{ username: string; loginEmail: string }> {
     const db = requireDb()
-    const res = await db.rpc('admin_invite_user', {
-      p_email: input.email,
+
+    const created = await db.rpc('admin_create_account', {
+      p_username: normaliseUsername(input.username),
       p_full_name: input.fullName ?? null,
       p_role: input.role,
       p_department: input.department ?? null,
       p_position: input.position ?? null,
       p_permissions: input.permissions,
+      p_email: input.email ?? null,
       p_note: input.note ?? '',
     })
-    if (res.error) throw new Error(res.error.message)
-    return String(res.data)
-  },
+    if (created.error) throw new Error(created.error.message)
 
-  /**
-   * Whether an address has a usable invitation.
-   *
-   * Callable before sign-in - the person has no account yet - which is why it
-   * is a definer function returning only a boolean. It leaks whether a given
-   * address may register, which the signup attempt itself would reveal anyway.
-   */
-  async invitationExists(email: string): Promise<boolean> {
-    const db = requireDb()
-    const res = await db.rpc('invitation_exists', { p_email: email })
-    if (res.error) throw new Error(res.error.message)
-    return Boolean(res.data)
+    const row = (created.data as unknown as { invitation_id: string; login_email: string }[])[0]
+    if (!row) throw new Error('The account record was not created.')
+
+    const isolated = createIsolatedClient()
+    const { data, error } = await isolated.auth.signUp({
+      email: row.login_email,
+      password: input.password,
+      options: { data: { full_name: input.fullName ?? input.username } },
+    })
+
+    if (error) {
+      // Withdraw the record so the username is not left looking taken.
+      await db.rpc('admin_discard_pending_account', { p_invitation_id: row.invitation_id })
+      throw new Error(friendlySignUpError(error.message))
+    }
+
+    // No session and no confirmed user means the project still requires email
+    // confirmation - which a username account can never satisfy.
+    if (!data.session && !data.user?.confirmed_at && !data.user?.email_confirmed_at) {
+      throw new Error(
+        'The account was created but cannot sign in yet: this Supabase project still requires ' +
+          'email confirmation, and a username has no mailbox. Turn off Authentication -> ' +
+          'Providers -> Email -> "Confirm email", then create the account again.',
+      )
+    }
+
+    return {
+      username: normaliseUsername(input.username),
+      loginEmail: row.login_email,
+    }
   },
 
   async revokeInvitation(id: string): Promise<void> {
@@ -163,6 +208,7 @@ export const rbacService: typeof DemoApi = {
 function rowToInvitation(r: {
   id: string
   email: string
+  username: string | null
   full_name: string | null
   role: Role
   department: string | null
@@ -178,6 +224,7 @@ function rowToInvitation(r: {
   return {
     id: r.id,
     email: r.email,
+    username: r.username,
     fullName: r.full_name,
     role: r.role,
     department: r.department,
@@ -190,4 +237,31 @@ function rowToInvitation(r: {
     revokedAt: r.revoked_at,
     note: r.note,
   }
+}
+
+/**
+ * Signup errors, in terms an admin creating somebody's account can act on.
+ *
+ * Only these specific cases are rewritten; anything else passes through, so a
+ * genuine configuration problem is not flattened into a generic message.
+ */
+function friendlySignUpError(message: string): string {
+  const m = message.toLowerCase()
+  if (m.includes('already registered') || m.includes('already been registered')) {
+    return 'That username is already taken.'
+  }
+  if (m.includes('password should be at least')) {
+    return 'Choose a password of at least six characters.'
+  }
+  if (m.includes('signups not allowed') || m.includes('signup is disabled')) {
+    return (
+      'This Supabase project has sign-ups disabled, which also blocks admins creating ' +
+      'accounts. Re-enable it under Authentication -> Providers -> Email; the database ' +
+      'still refuses anyone without an invitation, so nobody can self-register.'
+    )
+  }
+  if (m.includes('rate limit') || m.includes('too many')) {
+    return 'Too many accounts created just now. Wait a minute and try again.'
+  }
+  return message
 }

@@ -5,7 +5,8 @@ import type {
   PermissionKey,
 } from '@/types/rbac'
 import { PERMISSION_KEYS } from '@/types/rbac'
-import type { Role } from '@/types'
+import type { Role, User } from '@/types'
+import { normaliseUsername, toLoginEmail, usernameProblem } from '@/lib/username'
 import { delay } from '@/lib/delay'
 import { uid } from '@/lib/id'
 import { db, persist } from '../store'
@@ -176,29 +177,63 @@ export const rbacService = {
     return delay(state.invitations, 80)
   },
 
-  async invite(input: {
-    email: string
+  /**
+   * Creates a working account, offline.
+   *
+   * Mirrors the Supabase contract. There are no real credentials in demo mode -
+   * `demoAuth` accepts any password for a seeded account - so the password
+   * argument is recorded on the invitation note and otherwise ignored. The
+   * account itself is real enough to sign in with, which is what the screen
+   * needs to be reviewable.
+   */
+  async createAccount(input: {
+    username: string
+    password: string
     fullName?: string
     role: Role
     department?: string
     position?: string
     permissions: PermissionKey[]
+    email?: string
     note?: string
-  }): Promise<string> {
-    const email = input.email.trim().toLowerCase()
+  }): Promise<{ username: string; loginEmail: string }> {
+    const username = normaliseUsername(input.username)
+    const problem = usernameProblem(username)
+    if (problem) throw new Error(problem)
 
-    if (db.users.some((u) => u.email.toLowerCase() === email)) {
-      throw new Error(`An account already exists for ${email}`)
+    const loginEmail = input.email?.trim().toLowerCase() || toLoginEmail(username)
+
+    if (db.users.some((u) => u.email.toLowerCase() === loginEmail)) {
+      throw new Error(`The username "${username}" is already taken.`)
     }
 
-    // Supersede any outstanding invitation, as the RPC does.
-    state.invitations.forEach((i) => {
-      if (i.email === email && !i.acceptedAt && !i.revokedAt) i.revokedAt = new Date().toISOString()
-    })
+    const user: User = {
+      id: uid('usr'),
+      name: input.fullName?.trim() || username,
+      email: loginEmail,
+      role: input.role,
+      status: 'active',
+      jobTitle: input.position ?? 'Sales Agent',
+      team: input.department ?? 'Sales',
+      joinedAt: new Date().toISOString(),
+      lastActiveAt: new Date().toISOString(),
+    }
+    db.users.unshift(user)
+    persist('users', db.users)
 
-    const invitation: Invitation = {
+    if (input.permissions.length > 0) {
+      state.overrides[user.id] = Object.fromEntries(
+        input.permissions.map((k) => [k, true]),
+      ) as Partial<Record<PermissionKey, boolean>>
+      save()
+    }
+
+    // Recorded so the Accounts tab shows the same history it would with
+    // Supabase, already accepted rather than pending.
+    state.invitations.unshift({
       id: uid('inv'),
-      email,
+      email: loginEmail,
+      username,
       fullName: input.fullName ?? null,
       role: input.role,
       department: input.department ?? null,
@@ -206,29 +241,14 @@ export const rbacService = {
       permissions: input.permissions,
       invitedBy: currentUserId(),
       createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 14 * 86_400_000).toISOString(),
-      acceptedAt: null,
+      expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+      acceptedAt: new Date().toISOString(),
       revokedAt: null,
       note: input.note ?? '',
-    }
-
-    state.invitations.unshift(invitation)
+    })
     save()
-    return delay(invitation.id, 200)
-  },
 
-  async invitationExists(email: string): Promise<boolean> {
-    const address = email.trim().toLowerCase()
-    return delay(
-      state.invitations.some(
-        (i) =>
-          i.email === address &&
-          !i.acceptedAt &&
-          !i.revokedAt &&
-          new Date(i.expiresAt) > new Date(),
-      ),
-      80,
-    )
+    return delay({ username, loginEmail }, 260)
   },
 
   async revokeInvitation(id: string): Promise<void> {

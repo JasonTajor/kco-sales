@@ -928,6 +928,132 @@ do $$ begin
     'assessment performance reports a score rather than null');
 end $$;
 
+-- ===========================================================================
+--  USERNAME ACCOUNTS (0014)
+-- ===========================================================================
+\echo ''
+\echo '=== USERNAME ACCOUNTS ==='
+
+set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+
+do $$
+declare
+  v_id    uuid;
+  v_email text;
+begin
+  select invitation_id, login_email into v_id, v_email
+    from public.admin_create_account(
+      'andrea.lopez', 'Andrea Lopez', 'sales', 'Chat Support', 'Chat Support Agent',
+      array['content.view_drafts'], null, 'starts Monday');
+
+  perform pg_temp.ok(v_email = 'andrea.lopez@kco.local',
+    'a username maps to the internal login address');
+
+  perform pg_temp.ok(
+    (select username from public.invitations where id = v_id) = 'andrea.lopez',
+    'the pending account records the username');
+
+  -- Format is enforced in the database, not only in the form.
+  perform pg_temp.denied(
+    $q$select public.admin_create_account('ab')$q$,
+    'a username shorter than 3 characters is refused');
+  perform pg_temp.denied(
+    $q$select public.admin_create_account('Andrea Lopez')$q$,
+    'a username with spaces or capitals is refused');
+  perform pg_temp.denied(
+    $q$select public.admin_create_account('has@at.sign')$q$,
+    'a username containing @ is refused');
+
+  /*
+   * Calling again for the same username supersedes the pending record rather
+   * than erroring. That is deliberate: the signup happens seconds after this
+   * call, so a lingering pending record means the signup failed - and an admin
+   * retrying must not be blocked by their own half-finished attempt.
+   *
+   * Only one pending record may exist, which the partial unique index
+   * enforces; duplicate protection against a *real* account is the profiles
+   * check, asserted below once the account exists.
+   */
+  -- A separate username, so this does not clobber the permissions asserted
+  -- against andrea.lopez further down.
+  perform public.admin_create_account('retry.me', 'First Attempt');
+  perform public.admin_create_account('retry.me', 'Second Attempt');
+
+  perform pg_temp.ok(
+    (select count(*) from public.invitations
+      where username = 'retry.me' and accepted_at is null and revoked_at is null) = 1,
+    'retrying supersedes the pending record rather than stacking a second');
+
+  perform pg_temp.ok(
+    (select count(*) from public.invitations
+      where username = 'retry.me' and revoked_at is not null) = 1,
+    'the superseded record is marked revoked, not deleted');
+
+  perform pg_temp.ok(
+    (select full_name from public.invitations
+      where username = 'retry.me' and revoked_at is null) = 'Second Attempt',
+    'the surviving record is the most recent attempt');
+end $$;
+
+/*
+ * The signup that consumes it. Runs without the `authenticated` role because
+ * GoTrue writes auth.users as a privileged role.
+ */
+reset role;
+insert into auth.users (id, email) values
+  ('66666666-6666-6666-6666-666666666666', 'andrea.lopez@kco.local');
+set local role authenticated;
+set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+
+do $$ begin
+  perform pg_temp.ok(
+    (select username from public.profiles
+      where id = '66666666-6666-6666-6666-666666666666') = 'andrea.lopez',
+    'the username lands on the profile');
+
+  perform pg_temp.ok(
+    (select status from public.profiles
+      where id = '66666666-6666-6666-6666-666666666666') = 'active',
+    'the account is active immediately - no acceptance step');
+
+  perform pg_temp.ok(
+    (select granted from public.user_permissions
+      where user_id = '66666666-6666-6666-6666-666666666666'
+        and permission_key = 'content.view_drafts'),
+    'the chosen permissions are applied on creation');
+
+  perform pg_temp.ok(
+    (select department from public.profiles
+      where id = '66666666-6666-6666-6666-666666666666') = 'Chat Support',
+    'the team from the form is applied');
+
+  -- The username must be unique across accounts, case-insensitively.
+  perform pg_temp.denied(
+    $q$select public.admin_create_account('ANDREA.LOPEZ')$q$,
+    'usernames are unique regardless of capitalisation');
+end $$;
+
+-- A pending account can be withdrawn so the username is reusable.
+do $$
+declare v_id uuid;
+begin
+  select invitation_id into v_id from public.admin_create_account('temp.user');
+  perform public.admin_discard_pending_account(v_id);
+  perform pg_temp.ok(
+    not exists (select 1 from public.invitations where id = v_id),
+    'a pending account can be withdrawn, freeing the username');
+  perform pg_temp.ok(
+    (select login_email from public.admin_create_account('temp.user')) = 'temp.user@kco.local',
+    'the freed username can be used again straight away');
+end $$;
+
+set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+do $$ begin
+  perform pg_temp.denied(
+    $q$select public.admin_create_account('sneaky.user')$q$,
+    'a sales user cannot create an account');
+end $$;
+
 \echo ''
 \echo '=== PRIVACY ==='
 

@@ -75,27 +75,74 @@ Both are in the database, so they hold regardless of what the UI does:
 
 ## Nobody signs themselves up
 
-`handle_new_user` refuses a signup with no matching invitation — for email and
+`handle_new_user` refuses any signup with no matching record — for email and
 for Google alike. An account exists only because somebody with `users.invite`
-created a record saying who may join and with what access:
+created it.
+
+### The admin creates a working account
 
 ```
-Admin: Users & Access → Create account
-   email, name, team, job title
-   an access preset (Sales agent / Senior agent / Trainer / Content editor / Administrator)
-   optional per-permission tuning
+Users & Access -> Create account
+   username        andrea.lopez
+   password        suggested, or type your own
+   full name, team, job title
+   an access preset, plus optional per-permission tuning
         ↓
-Person: sign-in page → "Set up my account"
-   their address is checked against the invitation
-   they choose their own password
-        ↓
-handle_new_user consumes the invitation
-   profile created with the invited role, team and permissions
-   invitation marked accepted, so it cannot be reused
+The account works immediately. Hand over the username and password.
 ```
 
-The admin never learns the password. Invitations expire after 14 days and can
-be revoked before use.
+No email is sent and nothing has to be accepted. The password is displayed
+once, on the confirmation screen, and is not readable afterwards — not by the
+app and not by an admin. If it is lost, create a new one.
+
+### Usernames, and why there is an internal address
+
+Supabase Auth identifies a user by email; there is no username support to
+switch on. So a username maps to a deterministic internal address:
+
+```
+andrea.lopez  ->  andrea.lopez@kco.local
+```
+
+Nothing is ever delivered there. The mapping is plain string concatenation done
+on the client (`src/lib/username.ts`) and mirrored in `admin_create_account`,
+which means signing in needs no lookup and therefore leaks nothing about which
+usernames exist.
+
+Sign-in accepts **either** form: a value containing `@` is used as-is, anything
+else is mapped. Accounts created from a real address keep working unchanged.
+
+> `INTERNAL_EMAIL_DOMAIN` must stay in step between `src/lib/username.ts` and
+> migration 0014. Changing it would orphan every existing login, because the
+> stored address would no longer be derivable from the username.
+
+### How it works without a service-role key
+
+Creating an auth user normally needs the service-role key, which must never
+reach a browser. This flow avoids it entirely:
+
+1. `admin_create_account` records the pending account and returns the mapped
+   address. This is the privileged half, and RLS is what permits it.
+2. The admin's browser calls `signUp` on a **second Supabase client** built
+   with `persistSession: false`, so the admin's own session is untouched. This
+   half is unprivileged.
+3. `handle_new_user` finds the record from step 1 and turns it into an active
+   profile with the role and permissions the admin chose.
+
+If step 2 fails, step 1 is withdrawn so the username is free to retry rather
+than appearing permanently taken.
+
+### Required project setting
+
+**Authentication → Providers → Email → turn OFF "Confirm email".**
+
+A username has no mailbox, so a confirmation link could never be followed and
+the account would be created but permanently unable to sign in. The service
+detects this case and says so explicitly rather than leaving you to debug it.
+
+Leaving it off is the right trade here: an admin vouches for every account, and
+the database refuses anyone without a record, so there is nothing an email
+confirmation would add.
 
 ## Presets
 

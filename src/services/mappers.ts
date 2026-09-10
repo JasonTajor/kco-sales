@@ -35,6 +35,7 @@ export function rowToUser(r: Tables<'profiles'>): User {
     id: r.id,
     name: r.display_name?.trim() || r.full_name,
     email: r.email,
+    username: r.username,
     role: r.role,
     status: r.status,
     jobTitle: r.position ?? 'Sales Agent',

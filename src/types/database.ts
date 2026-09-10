@@ -603,6 +603,7 @@ export interface Database {
           accepted_by: string | null
           revoked_at: string | null
           note: string
+          username: string | null
         }
         Insert: {
           id?: string
@@ -619,6 +620,7 @@ export interface Database {
           accepted_by?: string | null
           revoked_at?: string | null
           note?: string
+          username?: string | null
         }
         Update: {
           id?: string
@@ -635,6 +637,7 @@ export interface Database {
           accepted_by?: string | null
           revoked_at?: string | null
           note?: string
+          username?: string | null
         }
         Relationships: [
           {
@@ -1194,6 +1197,7 @@ export interface Database {
           created_at: string
           updated_at: string
           last_login_at: string | null
+          username: string | null
         }
         Insert: {
           id: string
@@ -1208,6 +1212,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
           last_login_at?: string | null
+          username?: string | null
         }
         Update: {
           id?: string
@@ -1222,6 +1227,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
           last_login_at?: string | null
+          username?: string | null
         }
         Relationships: [
           {
@@ -1718,9 +1724,28 @@ export interface Database {
         }
         Returns: number
       }
+      admin_create_account: {
+        Args: {
+          p_username: string | null
+          p_full_name?: string | null
+          p_role?: Database["public"]["Enums"]['user_role'] | null
+          p_department?: string | null
+          p_position?: string | null
+          p_permissions?: string[] | null
+          p_email?: string | null
+          p_note?: string | null
+        }
+        Returns: unknown[]
+      }
       admin_dashboard_stats: {
         Args: Record<string, never>
         Returns: Json
+      }
+      admin_discard_pending_account: {
+        Args: {
+          p_invitation_id: string | null
+        }
+        Returns: unknown
       }
       admin_invite_user: {
         Args: {
@@ -1846,6 +1871,10 @@ export interface Database {
       report_training_completion: {
         Args: Record<string, never>
         Returns: unknown[]
+      }
+      revoke_anon_access: {
+        Args: Record<string, never>
+        Returns: unknown
       }
       save_answer: {
         Args: {

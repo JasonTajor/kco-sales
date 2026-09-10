@@ -10,7 +10,13 @@ export type UserStatus = 'active' | 'inactive' | 'pending'
 export interface User {
   id: string
   name: string
+  /** The internal login address. Usually derived from `username`. */
   email: string
+  /**
+   * The name they sign in with. Null for accounts created from a real email
+   * address, which sign in with that address instead.
+   */
+  username?: string | null
   role: Role
   status: UserStatus
   jobTitle: string

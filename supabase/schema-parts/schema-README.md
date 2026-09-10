@@ -12,7 +12,8 @@ Paste and run these in order:
 | 4 | `schema-04.sql` | 26 kB |
 | 5 | `schema-05.sql` | 25 kB |
 | 6 | `schema-06.sql` | 24 kB |
-| 7 | `schema-07.sql` | 15 kB |
+| 7 | `schema-07.sql` | 24 kB |
+| 8 | `schema-08.sql` | 6 kB |
 
 Each part is a transaction. They are not individually re-runnable - if you
 need to start over, drop the schema and run from part 1.

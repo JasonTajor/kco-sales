@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from '@/lib/env'
 import { env } from '@/lib/env'
 import { demoAuth } from './demo/demoAuth'
 import { rowToUser } from './mappers'
+import { toLoginEmail } from '@/lib/username'
 
 /**
  * Authentication, abstracted (§9).
@@ -82,11 +83,24 @@ export const authService = {
     return () => data.subscription.unsubscribe()
   },
 
-  async signInWithPassword(email: string, password: string): Promise<User> {
+  /**
+   * Signs in with a username or an email address.
+   *
+   * Accounts are created by an admin with a username, which maps to an
+   * internal address (`andrea` -> `andrea@kco.local`). The mapping is done
+   * here rather than at the call site so every entry point behaves the same,
+   * and locally rather than by lookup so nothing is revealed about which
+   * usernames exist.
+   *
+   * An address is passed through untouched, so accounts created from a real
+   * email keep working.
+   */
+  async signInWithPassword(identifier: string, password: string): Promise<User> {
+    const email = toLoginEmail(identifier)
     if (!supabase) return demoAuth.signInWithPassword(email, password)
 
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
+      email,
       password,
     })
     if (error) throw new Error(friendlyAuthError(error.message))
@@ -140,6 +154,13 @@ export const authService = {
     if (error) throw new Error(error.message)
   },
 
+  /**
+   * Self-service signup.
+   *
+   * Retained because the database refuses it - `handle_new_user` requires a
+   * matching record - so it is the honest way to report "you cannot register
+   * yourself" rather than hiding the button and leaving people guessing.
+   */
   async signUpWithPassword(email: string, password: string, fullName: string): Promise<{ needsVerification: boolean }> {
     if (!supabase) return demoAuth.signUpWithPassword(email, password, fullName)
 

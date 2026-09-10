@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
-import { AlertCircle, ArrowRight, Check, Loader2 } from 'lucide-react'
+import { ArrowRight, Check, Loader2 } from 'lucide-react'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,14 +9,13 @@ import { FullPageSpinner } from '@/components/common/FullPageSpinner'
 import { useToast } from '@/components/ui/toast'
 import { GoogleMark } from '@/components/common/GoogleMark'
 import { DEMO_ADMIN_EMAIL, DEMO_SALES_EMAIL } from '@/mock/users'
-import { rbacService } from '@/services'
 import { cn } from '@/lib/cn'
 
 interface FromState {
   from?: string
 }
 
-type Panel = 'signin' | 'forgot' | 'setup'
+type Panel = 'signin' | 'forgot'
 
 /**
  * Sign-in (§54).
@@ -40,14 +39,11 @@ export function LoginPage() {
         <div className="w-full max-w-[380px]">
           <Logo />
 
-          {panel === 'signin' && (
-            <SignInPanel
-              onForgot={() => setPanel('forgot')}
-              onSetup={() => setPanel('setup')}
-            />
+          {panel === 'signin' ? (
+            <SignInPanel onForgot={() => setPanel('forgot')} />
+          ) : (
+            <ForgotPanel onBack={() => setPanel('signin')} />
           )}
-          {panel === 'forgot' && <ForgotPanel onBack={() => setPanel('signin')} />}
-          {panel === 'setup' && <SetupPanel onBack={() => setPanel('signin')} />}
         </div>
       </div>
 
@@ -58,16 +54,10 @@ export function LoginPage() {
 
 /* -------------------------------------------------------------- sign in ---- */
 
-function SignInPanel({
-  onForgot,
-  onSetup,
-}: {
-  onForgot: () => void
-  onSetup: () => void
-}) {
+function SignInPanel({ onForgot }: { onForgot: () => void }) {
   const { signIn, signInWithGoogle, isDemoMode } = useAuth()
   const toast = useToast()
-  const [email, setEmail] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState<'password' | 'google' | null>(null)
   /** Marks the fields red; the message itself is announced by the toast. */
@@ -77,20 +67,23 @@ function SignInPanel({
     e.preventDefault()
     setInvalid(false)
 
-    if (!email.trim() || !password) {
+    if (!identifier.trim() || !password) {
       setInvalid(true)
-      toast.error('Missing email or password', 'Fill both fields to sign in.')
+      toast.error('Missing username or password', 'Fill both fields to sign in.')
       return
     }
 
     setBusy('password')
     try {
-      await signIn(email, password)
+      await signIn(identifier, password)
       // On success the provider swaps the route out from under this component,
       // so there is deliberately no setBusy(null) on the happy path.
     } catch (err) {
       setInvalid(true)
-      toast.error("That sign-in did not work", err instanceof Error ? err.message : 'Check your email and password, then try again.')
+      toast.error(
+        'That sign-in did not work',
+        err instanceof Error ? err.message : 'Check your username and password, then try again.',
+      )
       setBusy(null)
     }
   }
@@ -109,20 +102,28 @@ function SignInPanel({
     <>
       <h1 className="mt-rhythm text-2xl font-bold tracking-tight text-fg">Sign in</h1>
       <p className="mt-hair text-base text-fg-secondary">
-        Use your KCO work account to reach the training platform.
+        Sign in with the username and password your administrator gave you.
       </p>
 
       <form onSubmit={submit} className="mt-group space-y-group" noValidate>
-        <Field label="Email" htmlFor="email">
+        {/*
+          Username OR email. Accounts are created by an admin with a username,
+          and `toLoginEmail` maps it to the internal address; a real address is
+          passed through untouched. Typed `text`, not `email`, so the browser
+          does not reject a username for lacking an @.
+        */}
+        <Field label="Username" htmlFor="identifier">
           <Input
-            id="email"
-            type="email"
-            autoComplete="email"
+            id="identifier"
+            type="text"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
             required
-            placeholder="you@kco.ph"
+            placeholder="your.username"
             invalid={invalid}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
           />
         </Field>
 
@@ -186,15 +187,8 @@ function SignInPanel({
         who was told "an account has been made for you" needs to know that
         their first step is here and not a sign-up form.
       */}
-      <p className="mt-group text-center text-xs text-fg-secondary">
-        First time here?{' '}
-        <button
-          type="button"
-          onClick={onSetup}
-          className="font-bold text-fg underline-offset-2 hover:underline"
-        >
-          Set up my account
-        </button>
+      <p className="mt-group text-center text-xs text-fg-tertiary">
+        Accounts are created by your administrator. There is no sign-up.
       </p>
 
       {isDemoMode ? <DemoNotice /> : null}
@@ -284,173 +278,6 @@ function ForgotPanel({ onBack }: { onBack: () => void }) {
   )
 }
 
-/* ---------------------------------------------------------------- setup --- */
-
-const MIN_PASSWORD = 8
-
-/**
- * First sign-in for an invited person.
- *
- * There is no public sign-up. The database refuses any account with no
- * matching invitation, so this form is not a registration form - it is the
- * step where somebody an admin has already approved chooses their password.
- *
- * The invitation is checked before the password is asked for, so a mistyped
- * address is caught immediately rather than after filling the whole form.
- */
-function SetupPanel({ onBack }: { onBack: () => void }) {
-  const { signUp } = useAuth()
-
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirm, setConfirm] = useState('')
-  const [checking, setChecking] = useState(false)
-  const [invited, setInvited] = useState<boolean | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [done, setDone] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const check = async () => {
-    const address = email.trim()
-    if (!address) return
-    setChecking(true)
-    setError(null)
-    try {
-      setInvited(await rbacService.invitationExists(address))
-    } catch {
-      // If the check itself fails, let them try the signup - the database is
-      // the authority and will refuse it properly.
-      setInvited(true)
-    } finally {
-      setChecking(false)
-    }
-  }
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-
-    if (password.length < MIN_PASSWORD) {
-      return setError(`Choose a password of at least ${MIN_PASSWORD} characters.`)
-    }
-    if (password !== confirm) return setError('The two passwords do not match.')
-
-    setBusy(true)
-    try {
-      const { needsVerification } = await signUp(email.trim(), password, '')
-      setDone(true)
-      if (!needsVerification) {
-        // A session already exists; the provider will redirect.
-      }
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Could not set up the account. Ask your administrator to check the invitation.',
-      )
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (done) {
-    return (
-      <>
-        <div className="mt-rhythm flex size-9 items-center justify-center rounded-full bg-success-subtle">
-          <Check className="size-4.5 text-success-fg" aria-hidden />
-        </div>
-        <h1 className="mt-group text-2xl font-bold tracking-tight text-fg">Account ready</h1>
-        <p className="mt-hair text-base text-fg-secondary">
-          If your address needed confirming, check your inbox for the link. Otherwise you can sign
-          in now.
-        </p>
-        <Button className="mt-group w-full" onClick={onBack}>
-          Go to sign in
-        </Button>
-      </>
-    )
-  }
-
-  return (
-    <>
-      <h1 className="mt-rhythm text-2xl font-bold tracking-tight text-fg">Set up your account</h1>
-      <p className="mt-hair text-base text-fg-secondary">
-        Your administrator creates the account; you choose the password.
-      </p>
-
-      <form onSubmit={submit} className="mt-group space-y-group" noValidate>
-        <Field label="Work email" htmlFor="setup-email">
-          <Input
-            id="setup-email"
-            type="email"
-            autoComplete="email"
-            required
-            placeholder="you@kco.ph"
-            value={email}
-            onChange={(e) => {
-              setEmail(e.target.value)
-              setInvited(null)
-            }}
-            onBlur={check}
-          />
-        </Field>
-
-        {checking && (
-          <p className="flex items-center gap-hair text-xs text-fg-tertiary">
-            <Loader2 className="size-3.5 animate-spin" aria-hidden />
-            Checking your invitation
-          </p>
-        )}
-
-        {invited === false && (
-          <FormError>
-            There is no open invitation for that address. Ask your administrator to create your
-            account, then come back.
-          </FormError>
-        )}
-
-        {invited === true && (
-          <p className="flex items-center gap-hair text-xs text-success-fg">
-            <Check className="size-3.5" aria-hidden />
-            Invitation found. Choose a password.
-          </p>
-        )}
-
-        <Field label="Password" htmlFor="setup-password">
-          <Input
-            id="setup-password"
-            type="password"
-            autoComplete="new-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </Field>
-
-        <Field label="Confirm password" htmlFor="setup-confirm">
-          <Input
-            id="setup-confirm"
-            type="password"
-            autoComplete="new-password"
-            required
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-          />
-        </Field>
-
-        {error ? <FormError>{error}</FormError> : null}
-
-        <Button type="submit" className="w-full" disabled={busy || invited === false}>
-          {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : 'Create my password'}
-        </Button>
-        <Button type="button" variant="ghost" className="w-full" onClick={onBack}>
-          Back to sign in
-        </Button>
-      </form>
-    </>
-  )
-}
-
 /* ---------------------------------------------------------------- pieces --- */
 
 function Field({
@@ -474,18 +301,6 @@ function Field({
       </div>
       {children}
     </div>
-  )
-}
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="flex items-start gap-tight rounded-lg border-2 border-danger/30 bg-danger-subtle px-tight py-tight text-sm text-danger-fg"
-    >
-      <AlertCircle className="mt-px size-4 flex-none" aria-hidden />
-      <span>{children}</span>
-    </p>
   )
 }
 

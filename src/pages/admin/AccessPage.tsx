@@ -4,7 +4,6 @@ import {
   Copy,
   Info,
   Loader2,
-  Mail,
   RotateCcw,
   Search,
   ShieldCheck,
@@ -14,6 +13,7 @@ import {
 import type { Role, User } from '@/types'
 import type { Invitation, Permission, PermissionKey } from '@/types/rbac'
 import { ACCESS_PRESETS, invitationState } from '@/types/rbac'
+import { displayIdentifier, normaliseUsername, usernameProblem } from '@/lib/username'
 import { rbacService, userService } from '@/services'
 import { useAsync } from '@/hooks/useAsync'
 import { useAuth } from '@/features/auth/AuthProvider'
@@ -78,11 +78,11 @@ export function AccessPage() {
         }
       />
 
-      <Callout variant="info" title="Sign-up is closed">
-        Nobody can register themselves - not with a password, and not with Google. An account
-        exists only because somebody here created it, and the role and permissions come from that
-        record rather than from anything the person supplies. This is enforced in the database, so
-        it holds even for a request that never touches this app.
+      <Callout variant="info" title="You create the accounts">
+        Nobody can register themselves - not with a password, and not with Google. You set the
+        username, the password and the access; they sign in straight away with no email involved.
+        This is enforced in the database, so it holds even for a request that never touches this
+        app.
       </Callout>
 
       <StatRow>
@@ -97,10 +97,10 @@ export function AccessPage() {
           hint="Can reach the console"
         />
         <StatTile
-          label="Pending invites"
+          label="Never signed in"
           value={pendingInvites.length}
           tone={pendingInvites.length > 0 ? 'warning' : 'neutral'}
-          hint="Awaiting first sign-in"
+          hint="Created but not yet used"
         />
         <StatTile
           label="Permissions"
@@ -117,7 +117,7 @@ export function AccessPage() {
           { value: 'people', label: 'People' },
           {
             value: 'invitations',
-            label: `Invitations${pendingInvites.length ? ` (${pendingInvites.length})` : ''}`,
+            label: `Account log${pendingInvites.length ? ` (${pendingInvites.length})` : ''}`,
           },
           { value: 'roles', label: 'Role defaults' },
         ]}
@@ -245,8 +245,10 @@ function PeopleTab({
                       {u.status}
                     </Badge>
                   </span>
+                  {/* The username is what they sign in with; the internal
+                      address is noise. Real email accounts show the address. */}
                   <span className="mt-hair block truncate text-sm text-fg-secondary">
-                    {u.email}
+                    {displayIdentifier(u)}
                   </span>
                   <span className="mt-hair block text-2xs text-fg-tertiary">
                     {u.team} · {u.jobTitle} · last active {relativeTime(u.lastActiveAt)}
@@ -496,9 +498,9 @@ function InvitationsTab({
   if (invitations.length === 0) {
     return (
       <EmptyState
-        icon={<Mail className="size-6" />}
-        title="No invitations yet"
-        description="Create an account for someone and they will appear here until they sign in for the first time."
+        icon={<UserPlus className="size-6" />}
+        title="No accounts created yet"
+        description="Every account you create is listed here, with the access it was given."
         action={can('users.invite') ? <Button onClick={onInvite}>Create account</Button> : undefined}
       />
     )
@@ -528,7 +530,7 @@ function InvitationsTab({
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-tight">
                     <p className="truncate font-bold text-fg">
-                      {invitation.fullName || invitation.email}
+                      {invitation.fullName || invitation.username || invitation.email}
                     </p>
                     <Badge tone={invitation.role === 'admin' ? 'info' : 'neutral'}>
                       {invitation.role}
@@ -546,15 +548,18 @@ function InvitationsTab({
                     </Badge>
                   </div>
 
-                  {invitation.fullName && (
-                    <p className="mt-hair truncate text-sm text-fg-secondary">{invitation.email}</p>
-                  )}
+                  {/* Show the username, not the internal address - the
+                      kco.local domain is an implementation detail and putting
+                      it in front of an admin invites them to email it. */}
+                  <p className="mt-hair truncate text-sm text-fg-secondary">
+                    {invitation.username ?? invitation.email}
+                  </p>
 
                   <p className="mt-hair text-2xs text-fg-tertiary">
-                    {state === 'pending'
-                      ? `Expires ${formatDate(invitation.expiresAt)}`
-                      : state === 'accepted'
-                        ? `Signed in ${relativeTime(invitation.acceptedAt!)}`
+                    {state === 'accepted'
+                      ? `Active since ${relativeTime(invitation.acceptedAt!)}`
+                      : state === 'pending'
+                        ? 'Created, never signed in'
                         : `Created ${formatDate(invitation.createdAt)}`}
                     {invitation.department ? ` · ${invitation.department}` : ''}
                     {invitation.permissions.length > 0
@@ -573,12 +578,14 @@ function InvitationsTab({
                       variant="secondary"
                       size="sm"
                       onClick={() => {
-                        void navigator.clipboard?.writeText(invitation.email)
-                        toast.success('Email copied')
+                        void navigator.clipboard?.writeText(
+                          invitation.username ?? invitation.email,
+                        )
+                        toast.success('Username copied')
                       }}
                     >
                       <Copy className="size-3.5" aria-hidden />
-                      Copy email
+                      Copy username
                     </Button>
                     {can('users.invite') && (
                       <Button variant="ghost" size="sm" onClick={() => setRevokeTarget(invitation)}>
@@ -594,17 +601,17 @@ function InvitationsTab({
       </ul>
 
       <Callout variant="info" title="How the person gets in">
-        Send them the sign-in page and tell them to use <strong>Set up my account</strong> with the
-        exact address above. They choose their own password, so nobody else ever knows it. The
-        invitation expires after 14 days.
+        They go to the sign-in page and enter the username above with the password you gave them.
+        Nothing is emailed. If a password is lost, create a new one from their profile - it cannot
+        be read back.
       </Callout>
 
       <ConfirmDialog
         open={revokeTarget !== null}
         onOpenChange={(v) => !v && setRevokeTarget(null)}
-        title={`Revoke the invitation for ${revokeTarget?.email ?? ''}?`}
-        description="They will no longer be able to create an account with that address. You can invite them again afterwards."
-        confirmLabel="Revoke"
+        title={`Withdraw the pending account for ${revokeTarget?.username ?? revokeTarget?.email ?? ''}?`}
+        description="Only possible while it has never been signed into. The username becomes free to use again."
+        confirmLabel="Withdraw"
         destructive
         onConfirm={revoke}
       />
@@ -614,6 +621,18 @@ function InvitationsTab({
 
 /* ---------------------------------------------------------------- invite --- */
 
+/**
+ * Creating an account.
+ *
+ * The admin sets the username and the password, and the account works
+ * immediately - there is no email to send and nothing for the new person to
+ * accept. That is why the form asks for a password: somebody has to choose
+ * one, and an admin handing it over in person is simpler than a mail round
+ * trip for a team that shares an office.
+ *
+ * A generated suggestion is offered because an admin inventing twenty
+ * passwords will reuse one.
+ */
 function InviteDialog({
   catalogue,
   onClose,
@@ -625,7 +644,8 @@ function InviteDialog({
 }) {
   const toast = useToast()
 
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState(() => suggestPassword())
   const [fullName, setFullName] = useState('')
   const [department, setDepartment] = useState('')
   const [position, setPosition] = useState('')
@@ -634,11 +654,16 @@ function InviteDialog({
   const [custom, setCustom] = useState<Set<PermissionKey>>(new Set())
   const [showAll, setShowAll] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [created, setCreated] = useState<{ username: string; password: string } | null>(null)
 
   const preset = ACCESS_PRESETS.find((p) => p.id === presetId)!
 
-  // Switching preset replaces the selection; the checkboxes are for tuning it
-  // afterwards, not for accumulating across presets.
+  const nameProblem = username ? usernameProblem(username) : null
+  const passwordProblem =
+    password.length > 0 && password.length < 8 ? 'Use at least 8 characters.' : null
+  const ready = Boolean(username) && !nameProblem && password.length >= 8 && !busy
+
+  // Switching preset replaces the selection; the checkboxes tune it after.
   const choosePreset = (id: string) => {
     setPresetId(id)
     const next = ACCESS_PRESETS.find((p) => p.id === id)
@@ -653,14 +678,11 @@ function InviteDialog({
   }
 
   const submit = async () => {
-    if (!email.trim()) {
-      toast.error('An email address is required.')
-      return
-    }
     setBusy(true)
     try {
-      await rbacService.invite({
-        email: email.trim(),
+      const result = await rbacService.createAccount({
+        username: normaliseUsername(username),
+        password,
         fullName: fullName.trim() || undefined,
         role: preset.role,
         department: department.trim() || undefined,
@@ -668,8 +690,10 @@ function InviteDialog({
         permissions: [...custom],
         note: note.trim() || undefined,
       })
-      toast.success(`Account created for ${email.trim()}`)
-      onCreated()
+      // Held on screen rather than toasted away: this is the only time the
+      // password is visible, and the admin has to pass it on.
+      setCreated({ username: result.username, password })
+      toast.success(`Account created for ${result.username}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not create the account.')
     } finally {
@@ -687,19 +711,76 @@ function InviteDialog({
     return [...map.entries()]
   }, [catalogue])
 
+  /* ---------------------------------------------------------- credentials -- */
+
+  if (created) {
+    return (
+      <Dialog
+        open
+        onOpenChange={() => {
+          onCreated()
+        }}
+        title="Account ready"
+        description="Give these to them. The password is not shown again."
+        footer={
+          <Button
+            onClick={() => {
+              onCreated()
+            }}
+          >
+            Done
+          </Button>
+        }
+      >
+        <div className="space-y-group">
+          <div className="chunk space-y-tight p-card">
+            <CredentialRow label="Username" value={created.username} />
+            <CredentialRow label="Password" value={created.password} />
+          </div>
+
+          <Button
+            variant="secondary"
+            className="w-full"
+            onClick={() => {
+              void navigator.clipboard?.writeText(
+                `Username: ${created.username}\nPassword: ${created.password}`,
+              )
+              toast.success('Credentials copied')
+            }}
+          >
+            <Copy className="size-4" aria-hidden />
+            Copy both
+          </Button>
+
+          <Callout variant="warning" title="Shown once">
+            The password is not stored anywhere readable - not by this app and not by you. If it
+            is lost, come back and set a new one from the person&apos;s profile.
+          </Callout>
+
+          <p className="text-xs text-fg-secondary">
+            They sign in at the normal sign-in page with that username. Ask them to change the
+            password from Settings afterwards.
+          </p>
+        </div>
+      </Dialog>
+    )
+  }
+
+  /* ---------------------------------------------------------------- form -- */
+
   return (
     <Dialog
       open
       onOpenChange={(v) => !v && onClose()}
       size="lg"
       title="Create an account"
-      description="They will set their own password the first time they sign in."
+      description="They can sign in with these straight away. No email is sent."
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={busy || !email.trim()}>
+          <Button onClick={submit} disabled={!ready}>
             {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : 'Create account'}
           </Button>
         </>
@@ -708,46 +789,90 @@ function InviteDialog({
       <div className="space-y-group">
         <div className="grid gap-tight sm:grid-cols-2">
           <div className="space-y-tight">
-            <label htmlFor="inv-email" className="block text-xs font-bold text-fg-secondary">
-              Work email
+            <label htmlFor="acc-username" className="block text-xs font-bold text-fg-secondary">
+              Username
             </label>
             <Input
-              id="inv-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@kco.ph"
+              id="acc-username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value.toLowerCase())}
+              placeholder="andrea.lopez"
+              autoCapitalize="none"
+              spellCheck={false}
+              invalid={Boolean(nameProblem)}
               autoFocus
             />
+            {nameProblem ? (
+              <p className="text-2xs text-danger-fg">{nameProblem}</p>
+            ) : (
+              <p className="text-2xs text-fg-tertiary">
+                What they type to sign in. Lower-case, 3-30 characters.
+              </p>
+            )}
           </div>
+
           <div className="space-y-tight">
-            <label htmlFor="inv-name" className="block text-xs font-bold text-fg-secondary">
+            <label htmlFor="acc-password" className="block text-xs font-bold text-fg-secondary">
+              Password
+            </label>
+            <div className="flex items-center gap-tight">
+              <Input
+                id="acc-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                spellCheck={false}
+                invalid={Boolean(passwordProblem)}
+                className="font-mono"
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setPassword(suggestPassword())}
+                title="Suggest another"
+                aria-label="Suggest another password"
+              >
+                <RotateCcw className="size-3.5" aria-hidden />
+              </Button>
+            </div>
+            {passwordProblem ? (
+              <p className="text-2xs text-danger-fg">{passwordProblem}</p>
+            ) : (
+              <p className="text-2xs text-fg-tertiary">
+                Shown once after creating. They can change it in Settings.
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-tight">
+            <label htmlFor="acc-name" className="block text-xs font-bold text-fg-secondary">
               Full name
             </label>
             <Input
-              id="inv-name"
+              id="acc-name"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Andrea Lopez"
             />
           </div>
+
           <div className="space-y-tight">
-            <label htmlFor="inv-dept" className="block text-xs font-bold text-fg-secondary">
+            <label htmlFor="acc-dept" className="block text-xs font-bold text-fg-secondary">
               Team
             </label>
             <Input
-              id="inv-dept"
+              id="acc-dept"
               value={department}
               onChange={(e) => setDepartment(e.target.value)}
               placeholder="Chat Support"
             />
           </div>
-          <div className="space-y-tight">
-            <label htmlFor="inv-position" className="block text-xs font-bold text-fg-secondary">
+
+          <div className="space-y-tight sm:col-span-2">
+            <label htmlFor="acc-position" className="block text-xs font-bold text-fg-secondary">
               Job title
             </label>
             <Input
-              id="inv-position"
+              id="acc-position"
               value={position}
               onChange={(e) => setPosition(e.target.value)}
               placeholder="Chat Support Agent"
@@ -793,7 +918,7 @@ function InviteDialog({
             onClick={() => setShowAll((v) => !v)}
             className="flex items-center gap-hair text-xs font-bold text-fg-secondary hover:text-fg"
           >
-            <RotateCcw className="size-3.5" aria-hidden />
+            <ShieldCheck className="size-3.5" aria-hidden />
             {showAll ? 'Hide' : 'Fine-tune'} individual permissions
             {custom.size > 0 && !showAll ? ` (${custom.size} selected)` : ''}
           </button>
@@ -840,11 +965,11 @@ function InviteDialog({
         </div>
 
         <div className="space-y-tight">
-          <label htmlFor="inv-note" className="block text-xs font-bold text-fg-secondary">
+          <label htmlFor="acc-note" className="block text-xs font-bold text-fg-secondary">
             Note
           </label>
           <Textarea
-            id="inv-note"
+            id="acc-note"
             rows={2}
             value={note}
             onChange={(e) => setNote(e.target.value)}
@@ -854,6 +979,34 @@ function InviteDialog({
       </div>
     </Dialog>
   )
+}
+
+function CredentialRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-group">
+      <span className="text-xs font-bold text-fg-secondary">{label}</span>
+      <code className="min-w-0 truncate font-mono text-base font-bold text-fg">{value}</code>
+    </div>
+  )
+}
+
+/**
+ * A password an admin can read aloud.
+ *
+ * Two words, digits and a symbol. Deliberately not maximally random: this gets
+ * dictated across a desk or typed into a chat, so ambiguous characters and
+ * unpronounceable strings cost more than the entropy is worth. An admin who
+ * finds it awkward can type their own.
+ */
+function suggestPassword(): string {
+  const words = [
+    'Kangkong', 'Malunggay', 'Talong', 'Sitaw', 'Ampalaya', 'Kamote',
+    'Batangas', 'Laguna', 'Cavite', 'Bulacan', 'Quezon', 'Rizal',
+  ]
+  const pick = () => words[Math.floor(Math.random() * words.length)]!
+  const digits = Array.from({ length: 3 }, () => '23456789'[Math.floor(Math.random() * 8)]).join('')
+  const symbol = '!@#$%&*'[Math.floor(Math.random() * 7)]
+  return `${pick()}-${pick()}-${digits}${symbol}`
 }
 
 /* ---------------------------------------------------------- role defaults -- */

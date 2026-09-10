@@ -106,3 +106,29 @@ function enrich(error: PostgrestError): Error {
   const detail = error.hint ? ` (${error.hint})` : ''
   return new Error(`${error.message}${detail}`)
 }
+
+/**
+ * A throwaway client that never touches the stored session.
+ *
+ * Creating an account is done by calling `signUp` as the new user - which on
+ * the shared client would replace the admin's own session with the new
+ * account's, signing them out mid-task. This client persists nothing and
+ * refreshes nothing, so the signup happens in isolation and the admin stays
+ * signed in.
+ *
+ * It is also why creating accounts needs no service-role key: the privileged
+ * step (recording the pending account) is an RLS-checked RPC the admin is
+ * allowed to call, and the signup itself is unprivileged.
+ */
+export function createIsolatedClient(): Db {
+  if (!isSupabaseConfigured) {
+    throw new Error('Supabase is not configured.')
+  }
+  return createClient<Database>(env.supabaseUrl, env.supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  })
+}

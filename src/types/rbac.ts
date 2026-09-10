@@ -70,7 +70,10 @@ export interface EffectivePermissions {
 
 export interface Invitation {
   id: string
+  /** The internal login address. Usually derived from `username`. */
   email: string
+  /** The name the person signs in with. Null for real-email accounts. */
+  username: string | null
   fullName: string | null
   role: 'admin' | 'sales'
   department: string | null
