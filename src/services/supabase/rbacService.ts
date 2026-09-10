@@ -147,7 +147,42 @@ export const rbacService: typeof DemoApi = {
     email?: string
     note?: string
   }): Promise<{ username: string; loginEmail: string }> {
+    const db = requireDb()
     const username = normaliseUsername(input.username)
+
+    /*
+     * One RPC. `admin_create_user_account` writes the auth identity itself,
+     * already confirmed, so no mail is attempted, no project setting matters
+     * and there is nothing to deploy.
+     *
+     * The two older routes are kept below as fallbacks for a database that
+     * predates migration 0015 - identifiable by the function being missing
+     * (PGRST202).
+     */
+    const res = await db.rpc('admin_create_user_account', {
+      p_username: username,
+      p_password: input.password,
+      p_full_name: input.fullName ?? null,
+      p_role: input.role,
+      p_department: input.department ?? null,
+      p_position: input.position ?? null,
+      p_permissions: input.permissions,
+      p_email: input.email ?? null,
+      p_note: input.note ?? '',
+    })
+
+    if (!res.error) {
+      const row = (res.data as unknown as { username: string; login_email: string }[])[0]
+      if (row) return { username: row.username, loginEmail: row.login_email }
+    }
+
+    // Anything other than "the function does not exist" is a real refusal -
+    // a permission denial, a taken username - and must be reported, not
+    // retried down a worse path.
+    const missing =
+      res.error?.code === 'PGRST202' ||
+      /could not find the function|does not exist/i.test(res.error?.message ?? '')
+    if (res.error && !missing) throw new Error(res.error.message)
 
     const viaFunction = await createViaEdgeFunction({ ...input, username })
     if (viaFunction.handled) {
@@ -156,6 +191,15 @@ export const rbacService: typeof DemoApi = {
     }
 
     return createViaBrowserSignUp({ ...input, username })
+  },
+
+  async setPassword(userId: string, password: string): Promise<void> {
+    const db = requireDb()
+    const res = await db.rpc('admin_set_user_password', {
+      p_user_id: userId,
+      p_password: password,
+    })
+    if (res.error) throw new Error(res.error.message)
   },
 
   async revokeInvitation(id: string): Promise<void> {
@@ -302,7 +346,8 @@ async function createViaEdgeFunction(input: {
       }),
     })
 
-    // Not deployed: Supabase answers 404 for an unknown function name.
+    // Not deployed: Supabase answers 404 for an unknown function name. A
+    // CORS failure lands in the catch below and is treated the same way.
     if (res.status === 404) return { handled: false }
 
     const body = (await res.json().catch(() => ({}))) as {

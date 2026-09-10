@@ -251,6 +251,18 @@ export const rbacService = {
     return delay({ username, loginEmail }, 260)
   },
 
+  /**
+   * Sets somebody's password.
+   *
+   * A no-op offline: demo accounts have no credentials, and `demoAuth` accepts
+   * any password. It exists so the two backends keep identical surfaces and
+   * the screen is reviewable without Supabase.
+   */
+  async setPassword(userId: string, _password: string): Promise<void> {
+    if (!db.users.some((u) => u.id === userId)) throw new Error('No such user')
+    return delay(undefined, 160)
+  },
+
   async revokeInvitation(id: string): Promise<void> {
     const invitation = state.invitations.find((i) => i.id === id)
     if (!invitation) throw new Error('That invitation does not exist')

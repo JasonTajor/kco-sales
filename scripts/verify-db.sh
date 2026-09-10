@@ -31,8 +31,12 @@ done
 
 psql_f() { docker exec -i "$CONTAINER" psql -q -v ON_ERROR_STOP=1 -U postgres -d kco -f - < "$1"; }
 
-echo "==> creating Supabase stand-ins"
-psql_f "$ROOT/supabase/tests/_supabase_stub.sql"
+echo "==> creating Supabase stand-ins (full auth schema)"
+# The realistic auth schema, not the minimal stub. It declares
+# auth.identities.email as GENERATED and auth.users with its full column set,
+# which is what catches functions that write to auth directly - the class of
+# bug that shipped once already in bootstrap-admin.sql.
+psql_f "$ROOT/supabase/tests/_supabase_auth_full.sql"
 
 echo "==> applying migrations"
 for f in "$ROOT"/supabase/migrations/*.sql; do

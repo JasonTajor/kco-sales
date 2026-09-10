@@ -1737,6 +1737,20 @@ export interface Database {
         }
         Returns: unknown[]
       }
+      admin_create_user_account: {
+        Args: {
+          p_username: string | null
+          p_password: string | null
+          p_full_name?: string | null
+          p_role?: Database["public"]["Enums"]['user_role'] | null
+          p_department?: string | null
+          p_position?: string | null
+          p_permissions?: string[] | null
+          p_email?: string | null
+          p_note?: string | null
+        }
+        Returns: unknown[]
+      }
       admin_dashboard_stats: {
         Args: Record<string, never>
         Returns: Json
@@ -1785,6 +1799,13 @@ export interface Database {
           p_key: string | null
           p_granted: boolean | null
           p_note?: string | null
+        }
+        Returns: unknown
+      }
+      admin_set_user_password: {
+        Args: {
+          p_user_id: string | null
+          p_password: string | null
         }
         Returns: unknown
       }

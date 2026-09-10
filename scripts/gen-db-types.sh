@@ -26,7 +26,7 @@ else
     sleep 0.5
   done
   docker exec -i "$CONTAINER" psql -q -v ON_ERROR_STOP=1 -U postgres -d kco -f - \
-    < "$ROOT/supabase/tests/_supabase_stub.sql"
+    < "$ROOT/supabase/tests/_supabase_auth_full.sql"
   for f in "$ROOT"/supabase/migrations/*.sql; do
     docker exec -i "$CONTAINER" psql -q -v ON_ERROR_STOP=1 -U postgres -d kco -f - < "$f"
   done

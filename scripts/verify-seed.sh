@@ -26,7 +26,7 @@ psql_f() { docker exec -i "$CONTAINER" psql -q -v ON_ERROR_STOP=1 -U postgres -d
 psql_c() { docker exec -i "$CONTAINER" psql -t -A -U postgres -d kco -c "$1"; }
 
 echo "==> schema"
-psql_f "$ROOT/supabase/tests/_supabase_stub.sql"
+psql_f "$ROOT/supabase/tests/_supabase_auth_full.sql"
 for f in "$ROOT"/supabase/migrations/*.sql; do psql_f "$f"; done
 
 echo "==> seed (first run, from the split parts in filename order)"

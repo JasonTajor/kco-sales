@@ -6,40 +6,21 @@ import { cn } from '@/lib/cn'
 type Variant = 'info' | 'warning' | 'success' | 'danger'
 
 /**
- * The face is mixed against the surface rather than using the pale `-subtle`
- * token, so the panel reads as a solid colour instead of a wash. The left bar
- * carries the variant; the remaining edges are a hairline so the bar stays the
- * thing you notice.
+ * A panel face over a coloured lip - the same construction as `.chunk`, but
+ * the lip and the hairline carry the variant at full strength instead of the
+ * fill. The face is the solid surface colour, never a wash of the variant, so
+ * the text keeps the normal page contrast and nothing shows through.
+ *
+ * The lip is a box-shadow painted outside the border box and deliberately gets
+ * no reserved margin: the callout is usually a direct child of a `space-y-*`
+ * stack, and a margin here would out-specify that gap (Tailwind's space
+ * utilities are `:where()`, so any margin on the child wins).
  */
-const styles: Record<Variant, { wrap: string; emoji: EmojiName; tile: TileTone }> = {
-  info: {
-    wrap:
-      'border-info/25 border-l-info [--face:color-mix(in_oklab,var(--info)_20%,var(--surface))] ' +
-      '[--face-edge:color-mix(in_oklab,var(--info)_38%,var(--surface))]',
-    emoji: 'idea',
-    tile: 'lightblue',
-  },
-  warning: {
-    wrap:
-      'border-warning/25 border-l-warning [--face:color-mix(in_oklab,var(--warning)_20%,var(--surface))] ' +
-      '[--face-edge:color-mix(in_oklab,var(--warning)_38%,var(--surface))]',
-    emoji: 'warning',
-    tile: 'cheese',
-  },
-  success: {
-    wrap:
-      'border-success/25 border-l-success [--face:color-mix(in_oklab,var(--success)_20%,var(--surface))] ' +
-      '[--face-edge:color-mix(in_oklab,var(--success)_38%,var(--surface))]',
-    emoji: 'success',
-    tile: 'classic',
-  },
-  danger: {
-    wrap:
-      'border-danger/25 border-l-danger [--face:color-mix(in_oklab,var(--danger)_20%,var(--surface))] ' +
-      '[--face-edge:color-mix(in_oklab,var(--danger)_38%,var(--surface))]',
-    emoji: 'boom',
-    tile: 'chili',
-  },
+const styles: Record<Variant, { edge: string; emoji: EmojiName; tile: TileTone }> = {
+  info: { edge: '[--callout-edge:var(--info)]', emoji: 'idea', tile: 'lightblue' },
+  warning: { edge: '[--callout-edge:var(--warning)]', emoji: 'warning', tile: 'cheese' },
+  success: { edge: '[--callout-edge:var(--success)]', emoji: 'success', tile: 'classic' },
+  danger: { edge: '[--callout-edge:var(--danger)]', emoji: 'boom', tile: 'chili' },
 }
 
 export function Callout({
@@ -57,9 +38,9 @@ export function Callout({
   return (
     <div
       className={cn(
-        'face-chunky flex gap-snug rounded-lg border border-l-4 p-card',
-        '[--face-fg:var(--text)] [--face-lip:3px]',
-        s.wrap,
+        'flex gap-snug rounded-xl border border-[var(--callout-edge)] bg-surface p-card',
+        'shadow-[0_4px_0_0_var(--callout-edge)]',
+        s.edge,
         className,
       )}
     >

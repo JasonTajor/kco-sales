@@ -91,7 +91,7 @@ export function AccessPage() {
       />
 
       {blocker && (
-        <Callout variant="warning" title="Account creation is blocked by a project setting">
+        <Callout variant="warning" title="One migration still to run">
           <p>{blocker}</p>
           <Button
             variant="secondary"

@@ -1054,6 +1054,194 @@ do $$ begin
     'a sales user cannot create an account');
 end $$;
 
+-- ===========================================================================
+--  ONE-CALL ACCOUNT CREATION (0015)
+--
+--  This function writes auth.users directly and can create an administrator,
+--  so its guard is the whole security story. Tested accordingly.
+-- ===========================================================================
+\echo ''
+\echo '=== ONE-CALL ACCOUNT CREATION ==='
+
+set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+
+do $$
+declare
+  v_username text;
+  v_email    text;
+  v_id       uuid;
+begin
+  select username, login_email into v_username, v_email
+    from public.admin_create_user_account(
+      'bryan.cruz', 'correct-horse-battery', 'Bryan Cruz', 'sales',
+      'Phone Sales', 'Phone Sales Agent', array['content.view_drafts'], null, 'new hire');
+
+  perform pg_temp.ok(v_username = 'bryan.cruz' and v_email = 'bryan.cruz@kco.local',
+    'one call returns the username and its login address');
+
+  select id into v_id from public.profiles where username = 'bryan.cruz';
+  perform pg_temp.ok(v_id is not null, 'the profile exists immediately');
+
+  perform pg_temp.ok(
+    (select status from public.profiles where id = v_id) = 'active',
+    'the account is active with no confirmation step');
+
+  perform pg_temp.ok(
+    (select role from public.profiles where id = v_id) = 'sales',
+    'the role is the one the caller specified');
+
+  perform pg_temp.ok(
+    (select department from public.profiles where id = v_id) = 'Phone Sales',
+    'the team is applied');
+
+  perform pg_temp.ok(
+    (select granted from public.user_permissions
+      where user_id = v_id and permission_key = 'content.view_drafts'),
+    'the chosen permissions are applied');
+
+  perform pg_temp.ok(
+    (select i.accepted_at is not null from public.invitations i where i.username = 'bryan.cruz'),
+    'the internal invitation was consumed, not left pending');
+end $$;
+
+/*
+ * The auth-side assertions.
+ *
+ * `authenticated` has no privileges on the auth schema - correctly - so these
+ * checks drop the role. That is not a hole being tested around: the function
+ * itself is SECURITY DEFINER and runs as the owner, which is exactly why it
+ * can write there while its callers cannot read there.
+ */
+reset role;
+do $$
+declare v_id uuid;
+begin
+  select p.id into v_id from public.profiles p where p.username = 'bryan.cruz';
+
+  -- The point of writing auth.users directly: no confirmation outstanding.
+  perform pg_temp.ok(
+    (select u.email_confirmed_at is not null from auth.users u where u.id = v_id),
+    'the auth user is already confirmed, so no mail is needed');
+
+  -- And the password verifies the way GoTrue checks it.
+  perform pg_temp.ok(
+    (select u.encrypted_password = extensions.crypt('correct-horse-battery', u.encrypted_password)
+       from auth.users u where u.id = v_id),
+    'the stored bcrypt hash validates the password');
+
+  perform pg_temp.ok(
+    not (select u.encrypted_password = extensions.crypt('wrong-password', u.encrypted_password)
+           from auth.users u where u.id = v_id),
+    'a wrong password does not validate');
+
+  perform pg_temp.ok(
+    (select u.aud from auth.users u where u.id = v_id) = 'authenticated'
+      and (select u.role from auth.users u where u.id = v_id) = 'authenticated',
+    'aud and role are set the way GoTrue expects');
+
+  -- The identity row, with its generated email column populated by Postgres.
+  perform pg_temp.ok(
+    (select count(*) from auth.identities i where i.user_id = v_id and i.provider = 'email') = 1,
+    'an email identity row is created');
+  perform pg_temp.ok(
+    (select i.email from auth.identities i where i.user_id = v_id) = 'bryan.cruz@kco.local',
+    'the generated email column populated itself from identity_data');
+end $$;
+set local role authenticated;
+set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+
+do $$ begin
+  -- Duplicates, format and password rules.
+  perform pg_temp.denied(
+    $q$select public.admin_create_user_account('bryan.cruz', 'another-password-x')$q$,
+    'the same username cannot be created twice');
+
+  perform pg_temp.denied(
+    $q$select public.admin_create_user_account('ok.name', 'short')$q$,
+    'a password under 8 characters is refused');
+
+  perform pg_temp.denied(
+    $q$select public.admin_create_user_account('Bad Name', 'a-long-enough-password')$q$,
+    'an invalid username is refused');
+
+  perform pg_temp.ok(
+    (select count(*) from public.invitations i where i.username = 'ok.name') = 0,
+    'a refused call leaves no invitation behind');
+end $$;
+
+reset role;
+do $$ begin
+  perform pg_temp.ok(
+    (select count(*) from auth.users u where u.email like 'ok.name%') = 0,
+    'a refused call leaves no auth user behind');
+end $$;
+set local role authenticated;
+set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+
+-- ---------------------------------------------------------------------------
+-- The guard. This function can mint an administrator, so a non-admin reaching
+-- it would be the single worst hole in the schema.
+-- ---------------------------------------------------------------------------
+set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+
+do $$ begin
+  perform pg_temp.denied(
+    $q$select public.admin_create_user_account('sneaky.admin', 'a-long-enough-password',
+        null, 'admin')$q$,
+    'a SALES user cannot create an account - let alone an admin one');
+
+  perform pg_temp.denied(
+    $q$select public.admin_set_user_password(
+        '11111111-1111-1111-1111-111111111111', 'hijacked-password')$q$,
+    'a sales user cannot reset the admin''s password');
+end $$;
+
+reset role;
+do $$ begin
+  perform pg_temp.ok(
+    (select count(*) from auth.users u where u.email like 'sneaky.admin%') = 0,
+    'the sales user''s refused attempt created no auth user');
+end $$;
+set local role authenticated;
+set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+
+set local role anon;
+set local request.jwt.claim.sub = '';
+do $$ begin
+  perform pg_temp.denied(
+    $q$select public.admin_create_user_account('anon.admin', 'a-long-enough-password')$q$,
+    'anon cannot execute the account-creation function at all');
+end $$;
+
+set local role authenticated;
+set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+
+do $$
+declare v_id uuid;
+begin
+  select id into v_id from public.profiles where username = 'bryan.cruz';
+
+  -- An admin can set a new password, because one set this way is unrecoverable.
+  perform public.admin_set_user_password(v_id, 'a-brand-new-password');
+
+  perform pg_temp.denied(
+    format($q$select public.admin_set_user_password(%L, 'short')$q$, v_id),
+    'a short replacement password is refused');
+end $$;
+
+reset role;
+do $$
+declare v_id uuid;
+begin
+  select p.id into v_id from public.profiles p where p.username = 'bryan.cruz';
+  perform pg_temp.ok(
+    (select u.encrypted_password = extensions.crypt('a-brand-new-password', u.encrypted_password)
+       from auth.users u where u.id = v_id),
+    'an admin can set a new password and it validates');
+end $$;
+set local role authenticated;
+set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+
 \echo ''
 \echo '=== PRIVACY ==='
 

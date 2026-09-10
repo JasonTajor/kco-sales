@@ -26,7 +26,7 @@ done
 psql_f() { docker exec -i "$CONTAINER" psql -q -v ON_ERROR_STOP=1 -U postgres -d kco -f - < "$1"; }
 
 echo "==> Supabase stand-ins"
-psql_f "$ROOT/supabase/tests/_supabase_stub.sql"
+psql_f "$ROOT/supabase/tests/_supabase_auth_full.sql"
 
 echo "==> applying schema PARTS in filename order"
 for f in "$ROOT"/supabase/schema-parts/schema-[0-9]*.sql; do

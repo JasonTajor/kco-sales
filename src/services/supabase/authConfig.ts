@@ -32,14 +32,15 @@ export interface AuthConfig {
   /** True when Google is configured, so the sign-in button will work. */
   googleEnabled: boolean
   /**
-   * True when the `admin-create-user` Edge Function is deployed.
+   * True when `admin_create_user_account` exists in the database.
    *
-   * When it is, neither of the settings above matters: the function creates
-   * the identity with `email_confirm: true`, so no mail is attempted and no
-   * signup is involved. That is why the warning below is suppressed entirely
-   * in that case rather than nagging about a setting with no effect.
+   * This is the path that actually matters. It writes the auth identity
+   * directly, already confirmed, so no mail is attempted and neither of the
+   * settings above has any effect - which is why the warning is suppressed
+   * entirely when it is present, rather than nagging about a setting that
+   * cannot cause a failure.
    */
-  edgeFunctionDeployed: boolean
+  sqlAccountCreation: boolean
 }
 
 let cache: Promise<AuthConfig | null> | null = null
@@ -63,7 +64,7 @@ async function fetchConfig(): Promise<AuthConfig | null> {
       autoConfirm: Boolean(body.mailer_autoconfirm),
       signupDisabled: Boolean(body.disable_signup),
       googleEnabled: Boolean(body.external?.google),
-      edgeFunctionDeployed: await probeEdgeFunction(),
+      sqlAccountCreation: await probeSqlAccountCreation(),
     }
   } catch {
     // A failed probe must not block the form. The create attempt itself will
@@ -73,18 +74,26 @@ async function fetchConfig(): Promise<AuthConfig | null> {
 }
 
 /**
- * Is the Edge Function there?
+ * Is `admin_create_user_account` present?
  *
- * Probed with an OPTIONS request, which the function answers for CORS and
- * which creates nothing. An undeployed name returns 404.
+ * Probed by calling it with no arguments, which PostgREST answers with
+ * PGRST202 when the function does not exist and a different error when it does
+ * (the guard or the argument check rejects it). Nothing is created either way.
+ *
+ * Deliberately not a fetch to /functions/v1 - probing an undeployed Edge
+ * Function from the browser fails CORS preflight and logs an alarming error
+ * for what is only a capability check.
  */
-async function probeEdgeFunction(): Promise<boolean> {
+async function probeSqlAccountCreation(): Promise<boolean> {
   try {
-    const res = await fetch(`${env.supabaseUrl}/functions/v1/admin-create-user`, {
-      method: 'OPTIONS',
-      headers: { apikey: env.supabaseAnonKey },
+    const res = await fetch(`${env.supabaseUrl}/rest/v1/rpc/admin_create_user_account`, {
+      method: 'POST',
+      headers: { apikey: env.supabaseAnonKey, 'Content-Type': 'application/json' },
+      body: '{}',
     })
-    return res.status !== 404
+    if (res.status === 404) return false
+    const body = await res.text()
+    return !/PGRST202|could not find the function/i.test(body)
   } catch {
     return false
   }
@@ -109,8 +118,8 @@ export function invalidateAuthConfig(): void {
 export function accountCreationBlocker(config: AuthConfig | null): string | null {
   if (!config) return null
 
-  // The function bypasses both settings, so neither is a problem.
-  if (config.edgeFunctionDeployed) return null
+  // The SQL path bypasses both settings, so neither can cause a failure.
+  if (config.sqlAccountCreation) return null
 
   if (config.signupDisabled) {
     return (
@@ -122,12 +131,12 @@ export function accountCreationBlocker(config: AuthConfig | null): string | null
 
   if (!config.autoConfirm) {
     return (
-      'This project requires email confirmation, and a username has no mailbox - so the ' +
-      'confirmation cannot be delivered and Supabase rejects the account, usually reporting ' +
-      '"Email address is invalid" or a mail rate limit. Neither is really about the address. ' +
-      'Fix it either way: deploy the admin-create-user Edge Function (Dashboard → Edge ' +
-      'Functions, code in supabase/functions/admin-create-user), which sends no mail at all — ' +
-      'or turn OFF Authentication → Providers → Email → "Confirm email".'
+      'Run the migration supabase/migrations/20260910091400_create_account_in_sql.sql in the ' +
+      'Supabase SQL Editor. It adds a function that creates the account directly, so no ' +
+      'confirmation email is ever attempted and no project setting matters. ' +
+      '(Until then this project requires email confirmation, and a username has no mailbox — ' +
+      'which Supabase reports as "Email address is invalid" or a mail rate limit, neither of ' +
+      'which is really about the address.)'
     )
   }
 
